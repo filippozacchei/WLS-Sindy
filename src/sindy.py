@@ -78,8 +78,9 @@ class eSINDy:
             stratified_ensemble = False,
             n_hf = None,
             term_prob = 0.9):
-        x_train = np.concatenate([self.smoother(x, **self.smoother_kws) for x in x_train_list])
-        y_train = np.concatenate([self.df._differentiate(x, t) for x, t in zip(x_train_list, t_train_list)])
+        x_smoothed_list = [self.smoother(x, **self.smoother_kws) for x in x_train_list]
+        x_train = np.concatenate([x for x in x_smoothed_list])
+        y_train = np.concatenate([self.df._differentiate(x, t) for x, t in zip(x_smoothed_list, t_train_list)])
         
         self.library_functions.fit(x_train)
         Theta_full = self.library_functions.transform(x_train)
@@ -90,12 +91,11 @@ class eSINDy:
         coef_list = []
         
         for _ in range(n_ensembles if (sample_ensemble or library_ensemble) else 1):
-            
             Theta, y = extract_samples(Theta_full, y_train, sample_ensemble, stratified_ensemble, n_hf, n_subset)
             
             library_mask = extract_mask(Theta_full.shape[1], term_prob, library_ensemble)
             Theta = Theta[:, library_mask]
-            
+            print(Theta.shape)
             coefs = opt.STLSQ(Theta, y, alpha=alpha, threshold=threshold, max_iter=max_iter)
         
             # Expand back to full coefficient vector if library was reduced
@@ -103,7 +103,6 @@ class eSINDy:
                 full_coef = np.full((Theta_full.shape[1], y.shape[1]), np.nan) 
                 full_coef[library_mask, :] = coefs
                 coefs = full_coef
-
             coef_list.append(coefs)
         
         self.coef_list = coef_list

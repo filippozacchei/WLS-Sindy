@@ -1,5 +1,6 @@
 from scipy.integrate import solve_ivp
 from scipy.stats import qmc
+from scipy.signal import savgol_filter
 from sklearn.metrics import mean_squared_error
 import numpy as np
 from pysindy.utils import lorenz
@@ -22,3 +23,10 @@ def generate_data(dt, t_end_train, noise_level, n_trajectories, seed=1):
         x_train.append(traj + noise)
         t_train.append(t_vec.copy())
     return x_train, t_train
+
+def smooth_columns(x, **kwargs):
+    return np.column_stack([
+        savgol_filter(x[:, j], **kwargs) for j in range(x.shape[1])
+    ])
+    
+    

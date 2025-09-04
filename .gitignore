@@ -1,4 +1,6 @@
 Presentations/*
+*.DS_Store
+*__pycache__*
 *.ipynb
 *.png
 *.pdf
