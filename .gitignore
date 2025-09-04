@@ -1,1 +1,6 @@
 Presentations/*
+*.ipynb
+*.png
+*.pdf
+*.jpeg
+*.svg
