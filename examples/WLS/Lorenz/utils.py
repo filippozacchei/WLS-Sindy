@@ -12,6 +12,7 @@ from typing import List, Any
 import pandas as pd
 import itertools
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 def generate_data(dt, t_end, noise_level, n_trajectories, seed=1):
     rng = np.random.default_rng(seed)
@@ -90,6 +91,20 @@ def run_models(x_train_hf,
     mf_score = model_mf.score(x_test, t_test)
     return {'hf_score': hf_score, 'lf_score': lf_score, 'mf_score': mf_score}
 
+def single_run(lf_noise, hf_noise, n_lf, n_hf, data_configuration, ensemble_configuration, x_test, t_test):
+    x_train_hf, t_train_hf = generate_data(data_configuration['dt_hf'], data_configuration['t_end_train_hf'], hf_noise, n_hf)
+    x_train_lf, t_train_lf = generate_data(data_configuration['dt_lf'], data_configuration['t_end_train_lf'], lf_noise, n_lf)
+    scores = run_models(
+        x_train_hf, x_train_lf,
+        t_train_hf, t_train_lf,
+        lf_noise, hf_noise, n_lf, n_hf,
+        ensemble_configuration,
+        x_test, t_test,
+        ensemble_configuration['library_functions'],
+        ensemble_configuration['smoother_kws']
+    )
+    return scores
+
 def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test):
     param_grid = list(itertools.product(
         data_configuration['lf_noise'],
@@ -100,23 +115,16 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test):
 
     results_list = []
     for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc='Parameter combinations'):
-        hf_scores, lf_scores, mf_scores = [], [], []
-        for _ in tqdm(range(ensemble_configuration['n_runs']), leave=False, desc='Runs'):
-            # Generate training data for each run
-            x_train_hf, t_train_hf = generate_data(data_configuration['dt_hf'], data_configuration['t_end_train_hf'], hf_noise, n_hf)
-            x_train_lf, t_train_lf = generate_data(data_configuration['dt_lf'], data_configuration['t_end_train_lf'], lf_noise, n_lf)
-            scores = run_models(
-                x_train_hf, x_train_lf,
-                t_train_hf, t_train_lf,
+        # Parallelize the runs
+        scores_list = Parallel(n_jobs=-1)(
+            delayed(single_run)(
                 lf_noise, hf_noise, n_lf, n_hf,
-                ensemble_configuration,
-                x_test, t_test,
-                ensemble_configuration['library_functions'],
-                ensemble_configuration['smoother_kws']
-            )
-            hf_scores.append(scores['hf_score'])
-            lf_scores.append(scores['lf_score'])
-            mf_scores.append(scores['mf_score'])
+                data_configuration, ensemble_configuration, x_test, t_test
+            ) for _ in range(ensemble_configuration['n_runs'])
+        )
+        hf_scores = [s['hf_score'] for s in scores_list]
+        lf_scores = [s['lf_score'] for s in scores_list]
+        mf_scores = [s['mf_score'] for s in scores_list]
         results_list.append({
             'lf_noise': lf_noise,
             'hf_noise': hf_noise,
