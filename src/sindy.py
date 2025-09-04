@@ -95,7 +95,6 @@ class eSINDy:
             
             library_mask = extract_mask(Theta_full.shape[1], term_prob, library_ensemble)
             Theta = Theta[:, library_mask]
-            print(Theta.shape)
             coefs = opt.STLSQ(Theta, y, alpha=alpha, threshold=threshold, max_iter=max_iter)
         
             # Expand back to full coefficient vector if library was reduced

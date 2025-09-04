@@ -1,3 +1,4 @@
+*.csv
 Presentations/*
 *.DS_Store
 *__pycache__*
