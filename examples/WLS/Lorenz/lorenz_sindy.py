@@ -13,9 +13,9 @@ import pysindy as ps
 data_configuration = {
     'dt_lf': 0.001,
     'dt_hf': 0.001, 
-    'lf_noise': np.linspace(2.5, 25, 5),   # Low-fidelity noise, 10 values from 2.5 to 25
+    'lf_noise': np.linspace(2.5, 50, 20),   # Low-fidelity noise, 10 values from 2.5 to 25
     'hf_noise': np.arange(1, 11),           # High-fidelity noise, integers 1–10
-    'n_trajectories_lf': np.arange(5, 55, 5),  # Low-fidelity trajectories: 5,10,...,100
+    'n_trajectories_lf': np.arange(5, 105, 5),  # Low-fidelity trajectories: 5,10,...,100
     'n_trajectories_hf': np.arange(1, 11),   
     't_end_train_hf': 0.1,
     't_end_train_lf': 0.1,

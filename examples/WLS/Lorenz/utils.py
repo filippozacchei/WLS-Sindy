@@ -14,7 +14,7 @@ import itertools
 from tqdm import tqdm
 from joblib import Parallel, delayed
 import logging
-
+from tqdm.contrib import tqdm_joblib
 
 def lorenz_true_coefficients(sigma=10, rho=28, beta=8/3):
     # Feature order for PolynomialLibrary(degree=2): 
@@ -132,7 +132,7 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, b
         data_configuration["n_trajectories_hf"],
     )
 
-    print("Generating data \n") 
+    print("Generating data \n", flush=True) 
     
     rng = np.random.default_rng(base_seed)
     max_n_hf, max_n_lf = max(data_configuration["n_trajectories_hf"]), max(data_configuration["n_trajectories_lf"])
@@ -153,22 +153,23 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, b
             seed=rng.integers(0, 1_000_000),
         )
         
-    print("Training and Evaluating models \n")
+    print("Training and Evaluating models \n", flush=True)
 
     # --- Train & evaluate models ---
     results_list = []
-    for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc="Parameter combinations"):
-        scores_list = Parallel(n_jobs=-1)(
-            delayed(run_models)(
-                data_dict, lf_noise, hf_noise, n_lf, n_hf,
-                ensemble_configuration, x_test, t_test,
-                ensemble_configuration["library_functions"],
-                ensemble_configuration["smoother_kws"],
-                max_n_hf, max_n_lf, run_id
-            )
-            for run_id in range(ensemble_configuration["n_runs"])
-        )
 
+    for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc="Parameter combinations"):
+        with tqdm_joblib(tqdm(desc="Runs", total=ensemble_configuration['n_runs'], leave=False)):
+            scores_list = Parallel(n_jobs=-1)(
+                delayed(run_models)(
+                    data_dict, lf_noise, hf_noise, n_lf, n_hf,
+                    ensemble_configuration, x_test, t_test,
+                    ensemble_configuration["library_functions"],
+                    ensemble_configuration["smoother_kws"],
+                    max_n_hf, max_n_lf, run_id
+                )
+                for run_id in range(ensemble_configuration['n_runs'])
+            )
         results_list.append({
             "lf_noise": lf_noise,
             "hf_noise": hf_noise,
