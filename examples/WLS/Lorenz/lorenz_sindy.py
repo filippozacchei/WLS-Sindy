@@ -13,10 +13,10 @@ import pysindy as ps
 data_configuration = {
     'dt_lf': 0.001,
     'dt_hf': 0.001, 
-    'lf_noise': np.linspace(1.0,50.0,5,dtype=np.float32,endpoint=True),
+    'lf_noise': np.linspace(1.0,50.0,25,dtype=np.float32,endpoint=True),
     'hf_noise': np.linspace(1.0,10.0,2,dtype=np.float32,endpoint=True),
     'n_trajectories_lf': np.arange(5,105,5),
-    'n_trajectories_hf': np.arange(1,21,20),
+    'n_trajectories_hf': np.arange(1,11,1),
     't_end_train_hf': 0.1,
     't_end_train_lf': 0.1,
     't_end_test': 15,
@@ -27,7 +27,7 @@ data_configuration = {
 
 esindy_configuration = {
     'n_ensemble': 100,
-    'n_runs': 10,
+    'n_runs': 100,
     'library_functions': ps.PolynomialLibrary(degree=2,include_bias=False),
     'smoother_kws': {
         'window_length': 51,
