@@ -13,6 +13,28 @@ import pandas as pd
 import itertools
 from tqdm import tqdm
 from joblib import Parallel, delayed
+import logging
+
+
+def lorenz_true_coefficients(sigma=10, rho=28, beta=8/3):
+    # Feature order for PolynomialLibrary(degree=2): 
+    # [1, x, y, z, x^2, xy, xz, y^2, yz, z^2]
+    C_true = np.zeros((9, 3))
+    
+    # dx/dt = -sigma * x + sigma * y
+    C_true[0, 0] = -sigma   # coefficient on x
+    C_true[1, 0] = sigma    # coefficient on y
+
+    # dy/dt = rho * x - xz - y
+    C_true[0, 1] = rho      # coefficient on x
+    C_true[5, 1] = -1       # coefficient on xz
+    C_true[1, 1] = -1       # coefficient on y
+
+    # dz/dt = xy - beta * z
+    C_true[4, 2] = 1        # coefficient on xy
+    C_true[2, 2] = -beta    # coefficient on z
+
+    return C_true
 
 def generate_data(dt, t_end, noise_level, n_trajectories, seed=1):
     rng = np.random.default_rng(seed)
@@ -36,6 +58,10 @@ def savgol(x, **kwargs):
     return np.column_stack([
         savgol_filter(x[:, j], **kwargs) for j in range(x.shape[1])
     ])
+    
+def mrad(C_hat, C_true, axis=None, tau=1e-3):
+    rel_err = np.abs(C_hat - C_true) / np.maximum(np.abs(C_true), tau)
+    return np.median(rel_err, axis=axis)
 
 def run_esindy(x_train, 
                t_train, 
@@ -54,7 +80,7 @@ def run_esindy(x_train,
         smoother=smooth_columns,
         smoother_kws=smoother_kws
     )
-    model = model.fit(
+    return model.fit(
         x_train, t_train,
         sample_weight=weights,
         stratified_ensemble=bool(weights),
@@ -65,78 +91,97 @@ def run_esindy(x_train,
         alpha=alpha,
         max_iter=max_iter
     )
-    return model
 
-def run_models(x_train_hf, 
-               x_train_lf,
-               t_train_hf, 
-               t_train_lf, 
-               lf_noise, 
-               hf_noise, 
-               n_lf, 
-               n_hf, 
-               esindy_configuration, 
-               x_test, 
-               t_test,
-               library_functions,
-               smoother_kws):
-    model_hf = run_esindy(x_train_hf,t_train_hf,1.0,n_hf,esindy_configuration['n_ensemble'],library_functions,savgol,smoother_kws)
-    model_lf = run_esindy(x_train_lf,t_train_lf,1.0,n_hf,esindy_configuration['n_ensemble'],library_functions,savgol,smoother_kws)
-    x_train_mf = x_train_hf + x_train_lf
-    t_train_mf = t_train_hf + t_train_lf
+def run_models(data_dict, lf_noise, hf_noise, n_lf, n_hf, config,
+               x_test, t_test, library_functions, smoother_kws,
+               max_n_hf, max_n_lf, run_id, smoother=savgol):
+    
+    x_hf_full, t_hf_full = data_dict["hf"][hf_noise]
+    x_lf_full, t_lf_full = data_dict["lf"][lf_noise]
+    hf_offset, lf_offset = run_id * max_n_hf, run_id * max_n_lf
+
+    x_train_hf, t_train_hf = x_hf_full[hf_offset:hf_offset+n_hf], t_hf_full[hf_offset:hf_offset+n_hf]
+    x_train_lf, t_train_lf = x_lf_full[lf_offset:lf_offset+n_lf], t_lf_full[lf_offset:lf_offset+n_lf]
+
+    model_hf = run_esindy(x_train_hf, t_train_hf, 1.0, n_hf, config["n_ensemble"], library_functions, smoother, smoother_kws)
+    model_lf = run_esindy(x_train_lf, t_train_lf, 1.0, n_hf, config["n_ensemble"], library_functions, smoother, smoother_kws)
+
+    x_train_mf, t_train_mf = x_train_hf + x_train_lf, t_train_hf + t_train_lf
     weights = [(1.0/hf_noise)**2]*n_hf + [(1.0/lf_noise)**2]*n_lf
-    model_mf = run_esindy(x_train_mf,t_train_mf,weights,n_hf,esindy_configuration['n_ensemble'],library_functions,savgol,smoother_kws)
-    hf_score = model_hf.score(x_test, t_test)
-    lf_score = model_lf.score(x_test, t_test)
-    mf_score = model_mf.score(x_test, t_test)
-    return {'hf_score': hf_score, 'lf_score': lf_score, 'mf_score': mf_score}
+    model_mf = run_esindy(x_train_mf, t_train_mf, weights, n_hf, config["n_ensemble"], library_functions, smoother, smoother_kws)
 
-def single_run(lf_noise, hf_noise, n_lf, n_hf, data_configuration, ensemble_configuration, x_test, t_test):
-    x_train_hf, t_train_hf = generate_data(data_configuration['dt_hf'], data_configuration['t_end_train_hf'], hf_noise, n_hf)
-    x_train_lf, t_train_lf = generate_data(data_configuration['dt_lf'], data_configuration['t_end_train_lf'], lf_noise, n_lf)
-    scores = run_models(
-        x_train_hf, x_train_lf,
-        t_train_hf, t_train_lf,
-        lf_noise, hf_noise, n_lf, n_hf,
-        ensemble_configuration,
-        x_test, t_test,
-        ensemble_configuration['library_functions'],
-        ensemble_configuration['smoother_kws']
+    C_true = lorenz_true_coefficients()
+    return {
+        "hf_score": model_hf.score(x_test, t_test),
+        "lf_score": model_lf.score(x_test, t_test),
+        "mf_score": model_mf.score(x_test, t_test),
+        "hf_error": model_hf.mrad(C_true),
+        "lf_error": model_lf.mrad(C_true),
+        "mf_error": model_mf.mrad(C_true),
+        "hf_disagreement": model_hf.mrad_disagreement(),
+        "lf_disagreement": model_lf.mrad_disagreement(),
+        "mf_disagreement": model_mf.mrad_disagreement(),
+    }
+
+def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, base_seed=None):
+    """Evaluate HF, LF, MF models across parameter grid and return results as DataFrame."""
+    param_grid = itertools.product(
+        data_configuration["lf_noise"],
+        data_configuration["hf_noise"],
+        data_configuration["n_trajectories_lf"],
+        data_configuration["n_trajectories_hf"],
     )
-    return scores
 
-def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test):
-    param_grid = list(itertools.product(
-        data_configuration['lf_noise'],
-        data_configuration['hf_noise'],
-        data_configuration['n_trajectories_lf'],
-        data_configuration['n_trajectories_hf']
-    ))
+    print("Generating data \n") 
+    
+    rng = np.random.default_rng(base_seed)
+    max_n_hf, max_n_lf = max(data_configuration["n_trajectories_hf"]), max(data_configuration["n_trajectories_lf"])
+    data_dict = {"hf": {}, "lf": {}}
 
-    results_list = []
-    for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc='Parameter combinations'):
-        # Parallelize the runs
-        scores_list = Parallel(n_jobs=-1)(
-            delayed(single_run)(
-                lf_noise, hf_noise, n_lf, n_hf,
-                data_configuration, ensemble_configuration, x_test, t_test
-            ) for _ in range(ensemble_configuration['n_runs'])
+    # --- Generate full datasets (once) ---
+    for hf_noise in data_configuration["hf_noise"]:
+        data_dict["hf"][hf_noise] = generate_data(
+            data_configuration["dt_hf"], data_configuration["t_end_train_hf"],
+            hf_noise, max_n_hf * ensemble_configuration["n_runs"],
+            seed=rng.integers(0, 1_000_000),
         )
-        hf_scores = [s['hf_score'] for s in scores_list]
-        lf_scores = [s['lf_score'] for s in scores_list]
-        mf_scores = [s['mf_score'] for s in scores_list]
+
+    for lf_noise in data_configuration["lf_noise"]:
+        data_dict["lf"][lf_noise] = generate_data(
+            data_configuration["dt_lf"], data_configuration["t_end_train_lf"],
+            lf_noise, max_n_lf * ensemble_configuration["n_runs"],
+            seed=rng.integers(0, 1_000_000),
+        )
+        
+    print("Training and Evaluating models \n")
+
+    # --- Train & evaluate models ---
+    results_list = []
+    for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc="Parameter combinations"):
+        scores_list = Parallel(n_jobs=-1)(
+            delayed(run_models)(
+                data_dict, lf_noise, hf_noise, n_lf, n_hf,
+                ensemble_configuration, x_test, t_test,
+                ensemble_configuration["library_functions"],
+                ensemble_configuration["smoother_kws"],
+                max_n_hf, max_n_lf, run_id
+            )
+            for run_id in range(ensemble_configuration["n_runs"])
+        )
+
         results_list.append({
-            'lf_noise': lf_noise,
-            'hf_noise': hf_noise,
-            'n_trajectories_lf': n_lf,
-            'n_trajectories_hf': n_hf,
-            'score_hf_mean': np.mean(hf_scores),
-            'score_lf_mean': np.mean(lf_scores),
-            'score_mf_mean': np.mean(mf_scores),
-            'score_hf_std': np.std(hf_scores),
-            'score_lf_std': np.std(lf_scores),
-            'score_mf_std': np.std(mf_scores)
+            "lf_noise": lf_noise,
+            "hf_noise": hf_noise,
+            "n_trajectories_lf": n_lf,
+            "n_trajectories_hf": n_hf,
+            "score_hf_mean": np.mean([s["hf_score"] for s in scores_list]),
+            "score_lf_mean": np.mean([s["lf_score"] for s in scores_list]),
+            "score_mf_mean": np.mean([s["mf_score"] for s in scores_list]),
+            "score_hf_std": np.std([s["hf_score"] for s in scores_list]),
+            "score_lf_std": np.std([s["lf_score"] for s in scores_list]),
+            "score_mf_std": np.std([s["mf_score"] for s in scores_list]),
         })
+
     results_df = pd.DataFrame(results_list)
-    results_df.to_csv('model_scores.csv', index=False)
+    results_df.to_csv("model_scores.csv", index=False)
     return results_df

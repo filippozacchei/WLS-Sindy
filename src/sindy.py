@@ -64,6 +64,22 @@ class eSINDy:
         score = sk.metrics.r2_score(dXdt_exact, dXdt_pred)
         return score
     
+    def mrad(self, C_true, tau=1e-3):
+        self.check_fit()
+
+        rel_err = np.abs(self.coef_list - C_true) / np.maximum(np.abs(C_true), tau)
+        return np.median(rel_err)   
+    
+    def mrad_disagreement(self, tau=1e-3):
+        self.check_fit()
+        
+        coef_stack = np.array(self.coef_list)   # shape (n_ensembles, p, d)
+        coef_median = np.median(coef_stack, axis=0)  # consensus coefficients (p, d)
+
+        # relative deviation from the consensus
+        rel_dev = np.abs(coef_stack - coef_median) / np.maximum(np.abs(coef_median), tau)
+        return np.median(rel_dev)  
+    
     def fit(self, 
             x_train_list, 
             t_train_list, 
