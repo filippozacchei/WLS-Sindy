@@ -238,7 +238,7 @@ class eWSINDy(eSINDy):
 
             win_counts = [a.shape[0] for a in A_list] if isinstance(A_list, list) else [A_full.shape[0]]
             
-            return A_full, B_full, win_counts
+        return A_full, B_full, win_counts
     
     def fit(self,
         x_train_list,
