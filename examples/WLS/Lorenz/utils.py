@@ -6,15 +6,13 @@ import numpy as np
 from pysindy.utils import lorenz
 import sys
 sys.path.append("../../../src/")
-from sindy import eSINDy
+from sindy import eSINDy, eWSINDy
 from dataclasses import dataclass, field
 from typing import List, Any
 import pandas as pd
 import itertools
 from tqdm import tqdm
 from joblib import Parallel, delayed
-import logging
-from tqdm.contrib import tqdm_joblib
 
 def lorenz_true_coefficients(sigma=10, rho=28, beta=8/3):
     # Feature order for PolynomialLibrary(degree=2): 
@@ -73,17 +71,20 @@ def run_esindy(x_train,
                smoother_kws,
                treshold=0.5,
                alpha=1e-9,
-               max_iter=50):
-    model = eSINDy(
+               max_iter=20):
+    model = eWSINDy(
         library_functions=library_functions,
         features=["x", "y", "z"],
-        smoother=smooth_columns,
-        smoother_kws=smoother_kws
+        pde=False,
+        win_length=51,
+        stride=5, 
+        #smoother=smooth_columns,
+        #smoother_kws=smoother_kws
     )
     return model.fit(
         x_train, t_train,
         sample_weight=weights,
-        stratified_ensemble=bool(weights),
+        stratified_ensemble=True if weights != 1.0 else False,
         n_hf=n_hf,
         threshold=treshold,
         sample_ensemble=True,
@@ -157,32 +158,49 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, b
 
     # --- Train & evaluate models ---
     results_list = []
-
+    total_combinations = (
+        len(data_configuration['lf_noise']) *
+        len(data_configuration['hf_noise']) *
+        len(data_configuration['n_trajectories_lf']) *
+        len(data_configuration['n_trajectories_hf'])
+    )
     for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc="Parameter combinations"):
-        with tqdm_joblib(tqdm(desc="Runs", total=ensemble_configuration['n_runs'], leave=False)):
-            scores_list = Parallel(n_jobs=-1)(
-                delayed(run_models)(
-                    data_dict, lf_noise, hf_noise, n_lf, n_hf,
-                    ensemble_configuration, x_test, t_test,
-                    ensemble_configuration["library_functions"],
-                    ensemble_configuration["smoother_kws"],
-                    max_n_hf, max_n_lf, run_id
-                )
-                for run_id in range(ensemble_configuration['n_runs'])
+        scores_list = []
+        for run_id in tqdm(range(ensemble_configuration["n_runs"]), desc="Runs", leave=False):
+            score = run_models(
+                data_dict, lf_noise, hf_noise, n_lf, n_hf,
+                ensemble_configuration, x_test, t_test,
+                ensemble_configuration["library_functions"],
+                ensemble_configuration["smoother_kws"],
+                max_n_hf, max_n_lf, run_id
             )
+            scores_list.append(score)
+        
         results_list.append({
-            "lf_noise": lf_noise,
-            "hf_noise": hf_noise,
-            "n_trajectories_lf": n_lf,
-            "n_trajectories_hf": n_hf,
-            "score_hf_mean": np.mean([s["hf_score"] for s in scores_list]),
-            "score_lf_mean": np.mean([s["lf_score"] for s in scores_list]),
-            "score_mf_mean": np.mean([s["mf_score"] for s in scores_list]),
-            "score_hf_std": np.std([s["hf_score"] for s in scores_list]),
-            "score_lf_std": np.std([s["lf_score"] for s in scores_list]),
-            "score_mf_std": np.std([s["mf_score"] for s in scores_list]),
-        })
+                "lf_noise": lf_noise,
+                "hf_noise": hf_noise,
+                "n_trajectories_lf": n_lf,
+                "n_trajectories_hf": n_hf,
+                "score_hf_mean": np.mean([s["hf_score"] for s in scores_list]),
+                "score_lf_mean": np.mean([s["lf_score"] for s in scores_list]),
+                "score_mf_mean": np.mean([s["mf_score"] for s in scores_list]),
+                "score_hf_std": np.std([s["hf_score"] for s in scores_list]),
+                "score_lf_std": np.std([s["lf_score"] for s in scores_list]),
+                "score_mf_std": np.std([s["mf_score"] for s in scores_list]),
+                "error_hf_mean": np.mean([s["hf_error"] for s in scores_list]),
+                "error_lf_mean": np.mean([s["lf_error"] for s in scores_list]),
+                "error_mf_mean": np.mean([s["mf_error"] for s in scores_list]),
+                "error_hf_std": np.std([s["hf_error"] for s in scores_list]),
+                "error_lf_std": np.std([s["lf_error"] for s in scores_list]),
+                "error_mf_std": np.std([s["mf_error"] for s in scores_list]),
+                "disagree_hf_mean": np.mean([s["hf_disagreement"] for s in scores_list]),
+                "disagree_lf_mean": np.mean([s["lf_disagreement"] for s in scores_list]),
+                "disagree_mf_mean": np.mean([s["mf_disagreement"] for s in scores_list]),
+                "disagree_hf_std": np.std([s["hf_disagreement"] for s in scores_list]),
+                "disagree_lf_std": np.std([s["lf_disagreement"] for s in scores_list]),
+                "disagree_mf_std": np.std([s["mf_disagreement"] for s in scores_list]),
+            })
 
     results_df = pd.DataFrame(results_list)
-    results_df.to_csv("model_scores.csv", index=False)
+    results_df.to_csv("model_scores_traj_extreme.csv", index=False)
     return results_df
