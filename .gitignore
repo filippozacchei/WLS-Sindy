@@ -10,3 +10,4 @@ Presentations/*
 *.pdf
 *.jpeg
 *.svg
+examples/WLS/Lorenz/lorenz_sindy.py
