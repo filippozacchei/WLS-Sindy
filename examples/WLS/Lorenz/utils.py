@@ -83,25 +83,6 @@ def lorenz_true_coefficients(sigma: float = 10.0,
 
     return C_true
 
-
-def _validate_savgol_args(window_length: int, polyorder: int) -> None:
-    if window_length % 2 == 0 or window_length < 3:
-        raise ValueError("Savitzky–Golay 'window_length' must be odd and >= 3.")
-    if not (0 <= polyorder < window_length):
-        raise ValueError("'polyorder' must be >= 0 and < window_length.")
-
-
-def savgol_matrix(x: np.ndarray, **kwargs: Any) -> np.ndarray:
-    """
-    Column-wise Savitzky–Golay smoothing.
-    """
-    wl = kwargs.get("window_length", None)
-    po = kwargs.get("polyorder", None)
-    if wl is not None and po is not None:
-        _validate_savgol_args(wl, po)
-    return np.column_stack([savgol_filter(x[:, j], **kwargs) for j in range(x.shape[1])])
-
-
 def mrad(C_hat: np.ndarray, C_true: np.ndarray, axis: Optional[int] = None, tau: float = 1e-3) -> np.ndarray:
     """
     Median relative absolute deviation between estimated and true coefficients.
