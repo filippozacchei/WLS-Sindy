@@ -41,7 +41,7 @@ def generate_data(dt, t_end, noise_level, n_trajectories, seed=1):
     t_vec = np.arange(0, t_end, dt)
     t_span = (t_vec[0], t_vec[-1])
     x0_samples = sampler.random(n=n_trajectories)
-    x0_samples = qmc.scale(x0_samples, l_bounds=[-10]*3, u_bounds=[10]*3)
+    x0_samples = qmc.scale(x0_samples, l_bounds=[-10,-10,20], u_bounds=[10,10,30])
     x_train, t_train = [], []
     for i in range(n_trajectories):
         sol = solve_ivp(lorenz, t_span, x0_samples[i], t_eval=t_vec, **integrator_kwargs)
@@ -67,8 +67,6 @@ def run_esindy(x_train,
                n_hf, 
                n_ensemble, 
                library_functions, 
-               smooth_columns,
-               smoother_kws,
                treshold=0.5,
                alpha=1e-9,
                max_iter=20):
@@ -77,9 +75,7 @@ def run_esindy(x_train,
         features=["x", "y", "z"],
         pde=False,
         win_length=51,
-        stride=5, 
-        #smoother=smooth_columns,
-        #smoother_kws=smoother_kws
+        stride=5
     )
     return model.fit(
         x_train, t_train,
@@ -94,8 +90,8 @@ def run_esindy(x_train,
     )
 
 def run_models(data_dict, lf_noise, hf_noise, n_lf, n_hf, config,
-               x_test, t_test, library_functions, smoother_kws,
-               max_n_hf, max_n_lf, run_id, smoother=savgol):
+               x_test, t_test, library_functions,
+               max_n_hf, max_n_lf, run_id):
     
     x_hf_full, t_hf_full = data_dict["hf"][hf_noise]
     x_lf_full, t_lf_full = data_dict["lf"][lf_noise]
@@ -104,12 +100,12 @@ def run_models(data_dict, lf_noise, hf_noise, n_lf, n_hf, config,
     x_train_hf, t_train_hf = x_hf_full[hf_offset:hf_offset+n_hf], t_hf_full[hf_offset:hf_offset+n_hf]
     x_train_lf, t_train_lf = x_lf_full[lf_offset:lf_offset+n_lf], t_lf_full[lf_offset:lf_offset+n_lf]
 
-    model_hf = run_esindy(x_train_hf, t_train_hf, 1.0, n_hf, config["n_ensemble"], library_functions, smoother, smoother_kws)
-    model_lf = run_esindy(x_train_lf, t_train_lf, 1.0, n_hf, config["n_ensemble"], library_functions, smoother, smoother_kws)
+    model_hf = run_esindy(x_train_hf, t_train_hf, 1.0, n_hf, config["n_ensemble"], library_functions)
+    model_lf = run_esindy(x_train_lf, t_train_lf, 1.0, n_hf, config["n_ensemble"], library_functions)
 
     x_train_mf, t_train_mf = x_train_hf + x_train_lf, t_train_hf + t_train_lf
     weights = [(1.0/hf_noise)**2]*n_hf + [(1.0/lf_noise)**2]*n_lf
-    model_mf = run_esindy(x_train_mf, t_train_mf, weights, n_hf, config["n_ensemble"], library_functions, smoother, smoother_kws)
+    model_mf = run_esindy(x_train_mf, t_train_mf, weights, n_hf, config["n_ensemble"], library_functions)
 
     C_true = lorenz_true_coefficients()
     return {
@@ -124,17 +120,7 @@ def run_models(data_dict, lf_noise, hf_noise, n_lf, n_hf, config,
         "mf_disagreement": model_mf.mrad_disagreement(),
     }
 
-def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, base_seed=None):
-    """Evaluate HF, LF, MF models across parameter grid and return results as DataFrame."""
-    param_grid = itertools.product(
-        data_configuration["lf_noise"],
-        data_configuration["hf_noise"],
-        data_configuration["n_trajectories_lf"],
-        data_configuration["n_trajectories_hf"],
-    )
-
-    print("Generating data \n", flush=True) 
-    
+def generate_all_data(data_configuration, ensemble_configuration, base_seed):
     rng = np.random.default_rng(base_seed)
     max_n_hf, max_n_lf = max(data_configuration["n_trajectories_hf"]), max(data_configuration["n_trajectories_lf"])
     data_dict = {"hf": {}, "lf": {}}
@@ -153,6 +139,20 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, b
             lf_noise, max_n_lf * ensemble_configuration["n_runs"],
             seed=rng.integers(0, 1_000_000),
         )
+    return data_dict, max_n_hf, max_n_lf
+        
+def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, base_seed=1):
+    """Evaluate HF, LF, MF models across parameter grid and return results as DataFrame."""
+    param_grid = itertools.product(
+        data_configuration["lf_noise"],
+        data_configuration["hf_noise"],
+        data_configuration["n_trajectories_lf"],
+        data_configuration["n_trajectories_hf"],
+    )
+
+    print("Generating data \n", flush=True) 
+    
+    data_dict, max_n_hf, max_n_lf = generate_all_data(data_configuration, ensemble_configuration, base_seed)
         
     print("Training and Evaluating models \n", flush=True)
 
@@ -164,6 +164,8 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, b
         len(data_configuration['n_trajectories_lf']) *
         len(data_configuration['n_trajectories_hf'])
     )
+    print(f"Total parameter combinations: {total_combinations}", flush=True)
+    
     for lf_noise, hf_noise, n_lf, n_hf in tqdm(param_grid, desc="Parameter combinations"):
         scores_list = []
         for run_id in tqdm(range(ensemble_configuration["n_runs"]), desc="Runs", leave=False):
@@ -171,7 +173,6 @@ def evaluate_score(data_configuration, ensemble_configuration, x_test, t_test, b
                 data_dict, lf_noise, hf_noise, n_lf, n_hf,
                 ensemble_configuration, x_test, t_test,
                 ensemble_configuration["library_functions"],
-                ensemble_configuration["smoother_kws"],
                 max_n_hf, max_n_lf, run_id
             )
             scores_list.append(score)
