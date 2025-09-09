@@ -68,7 +68,7 @@ class eSINDy:
         self.check_fit()
 
         rel_err = np.abs(self.coef_list - C_true) / np.maximum(np.abs(C_true), tau)
-        return np.median(rel_err)   
+        return np.median(rel_err[rel_err>0])   
     
     def mrad_disagreement(self, tau=1e-3):
         self.check_fit()
@@ -78,7 +78,7 @@ class eSINDy:
 
         # relative deviation from the consensus
         rel_dev = np.abs(coef_stack - coef_median) / np.maximum(np.abs(coef_median), tau)
-        return np.median(rel_dev)  
+        return np.median(rel_dev[rel_dev>0])  
     
     def fit(self, 
             x_train_list, 

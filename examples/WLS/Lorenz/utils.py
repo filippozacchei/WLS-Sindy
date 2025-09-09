@@ -20,6 +20,8 @@ from pysindy.utils import lorenz
 # Make sure your path & imports work in your environment.
 # If this file sits next to your local SINDy implementations, prefer a relative import.
 # Otherwise, keep the path append in your runner script (not in the library).
+import sys
+sys.path.append('../../../src/')
 from sindy import eSINDy, eWSINDy  # noqa: F401  # used in run_esindy
 
 logger = logging.getLogger(__name__)
