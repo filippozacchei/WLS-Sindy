@@ -14,7 +14,8 @@ class eSINDy:
         self.coef_mean = None
         self.coef_list = []
         self.features = features
-        self.feature_names = [f'x_{i}' for i in range(len(features))] if feature_names==None else feature_names
+        self.input_features_ = feature_names
+        self.col_norms_ = None
         
     def check_fit(self):
         if self.coef_median is None:
@@ -50,7 +51,9 @@ class eSINDy:
         self.check_fit()
         
         x_test = np.concatenate(x_test_list)
-        Theta = self.library_functions.transform(x_test) 
+        Theta = self.library_functions.transform(x_test)
+        if self.col_norms_ is not None:
+            Theta = Theta / self.col_norms_[None, :]
         dXdt_pred = Theta @ self.coef_median
         
         return dXdt_pred
@@ -102,8 +105,10 @@ class eSINDy:
         Theta_full = self.library_functions.transform(x_train)
         
         weights = expand_weights(sample_weight, x_list=x_train_list)
-        Theta_full, y_train = rescale_trajectories(Theta_full, y_train, weights)
-        
+        Theta_full, y_train, self.col_norms_ = rescale_trajectories(
+            Theta_full, y_train, weights, rescale_columns=False
+        )
+                
         coef_list = []
         
         for _ in range(n_ensembles if (sample_ensemble or library_ensemble) else 1):
@@ -112,12 +117,16 @@ class eSINDy:
             library_mask = extract_mask(Theta_full.shape[1], term_prob, library_ensemble)
             Theta = Theta[:, library_mask]
             coefs = opt.STLSQ(Theta, y, alpha=alpha, threshold=threshold, max_iter=max_iter)
-        
+            if self.col_norms_ is not None:
+                coefs = coefs / self.col_norms_[:, None]  # rescale back
             # Expand back to full coefficient vector if library was reduced
             if library_ensemble:
                 full_coef = np.full((Theta_full.shape[1], y.shape[1]), np.nan) 
                 full_coef[library_mask, :] = coefs
                 coefs = full_coef
+                
+            if self.col_norms_ is not None:
+                coefs = coefs / self.col_norms_[:, None]  # rescale back
             coef_list.append(coefs)
         
         self.coef_list = coef_list
@@ -139,7 +148,8 @@ class eWSINDy(eSINDy):
                 spatiotemporal_grid=None,
                 derivative_order=None,
                 K=None,
-                H_xt=None):
+                H_xt=None,
+                periodic=False):
 
         # Call parent constructor
         super().__init__(
@@ -155,6 +165,7 @@ class eWSINDy(eSINDy):
         self.H_xt = H_xt
         self.win_length = win_length
         self.stride = stride
+        self.periodic = periodic
 
         # --- Validation ---
         if self.pde:
@@ -221,10 +232,16 @@ class eWSINDy(eSINDy):
                 include_interaction=True,
                 K=self.K,
                 H_xt=self.H_xt,
+                periodic=self.periodic
             )
+            
+            self.weak_features = weak_features  
 
             # Build library and weak moments
             weak_features.fit(x_train_list)  
+            self.feature_names_ = weak_features.get_feature_names(
+                input_features=self.input_features_
+            )
 
             A_list = weak_features.transform(x_train_list)
             if isinstance(A_list, list):
@@ -253,11 +270,14 @@ class eWSINDy(eSINDy):
         n_subset=0.5,
         stratified_ensemble=False,
         n_hf=None,
-        term_prob=0.9):   
+        term_prob=0.9,
+        rescale_columns=False,):   
         
         A_full, B_full, win_counts = self.assembly(x_train_list, t_train_list)
         weights = expand_weights(sample_weight, win_counts=win_counts, n_hf=n_hf)
-        A_full, B_full = rescale_trajectories(A_full, B_full, weights)
+        A_full, B_full, self.col_norms_ = rescale_trajectories(
+            A_full, B_full, weights, rescale_columns
+        )
         
         
         coef_list = []
@@ -267,9 +287,9 @@ class eWSINDy(eSINDy):
             A, B = extract_samples(A_full, B_full, sample_ensemble, stratified_ensemble, n_hf, n_subset)
             
             library_mask = extract_mask(A.shape[1], term_prob, library_ensemble)
-            A = A[:, library_mask]
+            A_mask = A[:, library_mask]
             
-            coefs = opt.STLSQ(A, B, alpha=alpha, threshold=threshold, max_iter=max_iter)
+            coefs = opt.STLSQ_weak(A_mask, B, alpha=alpha, threshold=threshold, max_iter=max_iter)
         
             # Expand back to full coefficient vector if library was reduced
             if library_ensemble:
@@ -334,11 +354,27 @@ def expand_weights(weights,
 
     raise ValueError("Could not expand weights: shape mismatch.")
 
-def rescale_trajectories(X, Y, weights):
-    if weights is None:
-        return X, Y
-    sqrt_w = np.sqrt(weights)
-    return X * sqrt_w[:, None], Y * sqrt_w[:, None]
+def rescale_trajectories(X, Y, weights=None, rescale_columns=True):
+    """
+    Apply weighting (row scaling) and optional column rescaling.
+
+    - weights: vector of shape (n_samples,)
+    - rescale_columns: if True, scale each column of X to unit 2-norm
+    """
+    # --- Row weighting ---
+    if weights is not None:
+        sqrt_w = np.sqrt(weights)
+        X = X * sqrt_w[:, None]
+        Y = Y * sqrt_w[:, None]
+
+    # --- Column normalization ---
+    if rescale_columns:
+        norms = np.linalg.norm(X, axis=0) + 1e-12  # avoid div by zero
+        X = X / norms[None, :]
+        # Store norms for inverse transform later
+        return X, Y, norms
+
+    return X, Y, None
     
 def stratified_split(n_total, n_hf, n_subset, seed = None):
 
