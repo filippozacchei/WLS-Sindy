@@ -197,26 +197,62 @@ def run_models(data_dict: Dict[str, Dict[int, Tuple[List[np.ndarray], List[np.nd
                run_id: int) -> Dict[str, float]:
     """
     Train HF, LF, and MF models for one parameter setting and one run_id, then score.
+
+    In this setup:
+      - Each run regenerates its own HF/LF pools (fresh data each run).
+      - We do *not* use offsets into a giant pool.
+      - Ensembles are stratified between HF and LF for better uncertainty quantification.
     """
-    # Full pre-generated pools
+    # Pre-generated HF/LF pools (each run is fresh)
     x_hf_full, t_hf_full = data_dict["hf"][hf_noise]
     x_lf_full, t_lf_full = data_dict["lf"][lf_noise]
 
-    hf_offset = run_id * max_n_hf
-    lf_offset = run_id * max_n_lf
+    # Just take first n_hf and n_lf (no offsets needed since pools are regenerated each run)
+    x_train_hf, t_train_hf = _subset_for_run(x_hf_full, t_hf_full, 0, n_hf)
+    x_train_lf, t_train_lf = _subset_for_run(x_lf_full, t_lf_full, 0, n_lf)
 
-    x_train_hf, t_train_hf = _subset_for_run(x_hf_full, t_hf_full, hf_offset, n_hf)
-    x_train_lf, t_train_lf = _subset_for_run(x_lf_full, t_lf_full, lf_offset, n_lf)
+    # Train HF model (ensembles with stratified sampling)
+    model_hf = run_esindy(
+        x_train_hf, t_train_hf,
+        sample_weight=1.0,
+        n_hf=n_hf,
+        n_ensembles=es_config.n_ensembles,
+        library_functions=library_functions,
+        threshold=0.5,
+        alpha=1e-9,
+        max_iter=20
+    )
 
-    model_hf = run_esindy(x_train_hf, t_train_hf, 1.0, n_hf, es_config.n_ensembles, library_functions)
-    model_lf = run_esindy(x_train_lf, t_train_lf, 1.0, n_hf, es_config.n_ensembles, library_functions)
+    # Train LF model (ensembles with stratified sampling)
+    model_lf = run_esindy(
+        x_train_lf, t_train_lf,
+        sample_weight=1.0,
+        n_hf=0,   # no HF trajectories in LF-only case
+        n_ensembles=es_config.n_ensembles,
+        library_functions=library_functions,
+        threshold=0.5,
+        alpha=1e-9,
+        max_iter=20
+    )
 
-    # Multi-fidelity concatenation with noise-aware weights
+    # Train MF model (with weights and stratified sampling)
     x_train_mf = x_train_hf + x_train_lf
     t_train_mf = t_train_hf + t_train_lf
-    weights = ([float((1.0 / hf_noise) ** 2)] * n_hf) + ([float((1.0 / lf_noise) ** 2)] * n_lf)
-    model_mf = run_esindy(x_train_mf, t_train_mf, weights, n_hf, es_config.n_ensembles, library_functions)
+    weights = ([float((1.0 / hf_noise) ** 2)] * n_hf) + \
+              ([float((1.0 / lf_noise) ** 2)] * n_lf)
 
+    model_mf = run_esindy(
+        x_train_mf, t_train_mf,
+        sample_weight=weights,
+        n_hf=n_hf,
+        n_ensembles=es_config.n_ensembles,
+        library_functions=library_functions,
+        threshold=0.5,
+        alpha=1e-9,
+        max_iter=20
+    )
+
+    # Ground truth coefficients
     C_true = lorenz_true_coefficients()
 
     return {
@@ -229,9 +265,13 @@ def run_models(data_dict: Dict[str, Dict[int, Tuple[List[np.ndarray], List[np.nd
         "hf_disagreement": model_hf.mrad_disagreement(),
         "lf_disagreement": model_lf.mrad_disagreement(),
         "mf_disagreement": model_mf.mrad_disagreement(),
+        "coef_lf_list": np.array(model_lf.coef_list),
+        "coef_hf_list": np.array(model_hf.coef_list),
+        "coef_mf_list": np.array(model_mf.coef_list),
+        "coef_lf_median": model_lf.coef_median,
+        "coef_hf_median": model_hf.coef_median,
+        "coef_mf_median": model_mf.coef_median,
     }
-
-
 # -------------------------- Experiment orchestration --------------------------
 
 def generate_all_data(data_cfg: DataConfig,
@@ -241,7 +281,7 @@ def generate_all_data(data_cfg: DataConfig,
     """
     Pre-generate the full pools of HF and LF trajectories for all noise levels and runs.
     """
-    rng = np.random.default_rng(base_seed)
+    rng = np.random.seed(base_seed)
     max_n_hf = int(np.max(data_cfg.n_trajectories_hf))
     max_n_lf = int(np.max(data_cfg.n_trajectories_lf))
 
@@ -254,7 +294,7 @@ def generate_all_data(data_cfg: DataConfig,
             t_end=data_cfg.t_end_train_hf,
             noise_level=float(hf_noise),
             n_trajectories=max_n_hf * es_cfg.n_runs,
-            seed=int(rng.integers(0, 1_000_000)),
+            seed=base_seed,
         )
 
     # LF pools
@@ -264,7 +304,7 @@ def generate_all_data(data_cfg: DataConfig,
             t_end=data_cfg.t_end_train_lf,
             noise_level=float(lf_noise),
             n_trajectories=max_n_lf * es_cfg.n_runs,
-            seed=int(rng.integers(0, 1_000_000)),
+            seed=base_seed*10000000,
         )
 
     return data_dict, max_n_hf, max_n_lf
