@@ -6,6 +6,7 @@ for the same underlying system with various initial conditions.
 
 Output files:
     ./data/double_pendulum.npz
+    ./data/metadata.json
 """
 
 import os
@@ -13,6 +14,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+
 # -------------------------------
 # Dynamical system
 # -------------------------------

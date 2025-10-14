@@ -9,20 +9,17 @@ import itertools
 import logging
 import numpy as np
 import pandas as pd
-
+import pysindy as
 from scipy.integrate import solve_ivp
 from scipy.signal import savgol_filter
 from scipy.stats import qmc
 from sklearn.metrics import mean_squared_error
-
-from pysindy.utils import lorenz
 
 # Make sure your path & imports work in your environment.
 # If this file sits next to your local SINDy implementations, prefer a relative import.
 # Otherwise, keep the path append in your runner script (not in the library).
 import sys
 sys.path.append('../../../src/')
-from sindy import eSINDy, eWSINDy  # noqa: F401  # used in run_esindy
 
 logger = logging.getLogger(__name__)
 
