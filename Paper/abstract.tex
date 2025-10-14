@@ -1,0 +1,20 @@
+\begin{abstract}
+Experimental data are rarely noise-free and often exhibit varying levels of fidelity. 
+Measurement uncertainty may differ across repeated observations, sensor apparatus, or even during a single experiment. 
+This work addresses the problem of discovering nonlinear dynamical systems from such inhomogeneous data. 
+We extend the Sparse Identification of Nonlinear Dynamical Systems (SINDy) framework to handle variable noise levels
+by combining Ensemble SINDy and Weak SINDy within a weighted regression formulation derived from weighted least squares. 
+The approach not only mitigates the adverse effects of heteroscedastic noise but also shows that repeated, cost-effective,
+low-quality measurements can enhance model recovery, achieving performance comparable or superior to reconstructions
+based solely on high-fidelity data. A mathematical intuition for the method’s optimality is provided.
+
+The study is organized in two parts. 
+The first examines scenarios with multiple trajectories of the same dynamical system, 
+each affected by distinct noise levels, highlighting the benefits of their coherent integration. 
+The second focuses on single-trajectory data with spatially or temporally varying noise. 
+The methodology is validated on several benchmark systems, including the Lorenz attractor,
+the double pendulum, the Hopf oscillator, Burgers’ equation, and the Navier–Stokes equations.
+
+The results demonstrate that properly weighted sparse regression transforms measurement heterogeneity 
+from a limitation into a source of information, enabling robust and accurate model discovery in complex dynamical systems.
+\end{abstract}

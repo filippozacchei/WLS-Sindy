@@ -1,0 +1,122 @@
+%=========================================================
+% main.tex — Elsevier article template
+%=========================================================
+\documentclass[final,3p,10.5pt]{elsarticle}
+\geometry{margin=1in}
+% Options: review, 1p, 3p, 5p, twocolumn, authoryear, number
+
+%---------------------------------------------------------
+% PACKAGES
+%---------------------------------------------------------
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{xcolor}
+\usepackage{natbib}
+
+%---------------------------------------------------------
+% BIBLIOGRAPHY STYLE
+%---------------------------------------------------------
+% Elsevier recommends using biblatex with biber or natbib
+\bibliographystyle{unsrt} % or elsarticle-num
+
+%---------------------------------------------------------
+% DOCUMENT INFORMATION
+%---------------------------------------------------------
+% \journal{Journal Name}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Weighted SINDy: Sparse Discovery of Nonlinear Dynamical Systems with Fidelity-Weighted Measurements}
+
+\author[aff1]{Filippo Zacchei\corref{cor1}}
+\ead{filippo.zacchei@polimi.it}
+
+\author[aff2]{Ana Larranaga}
+% \ead{alarra@uw.edu}
+
+\author[aff3]{Attilio Frangi}
+% \ead{attilio.frangi@polimi.it}
+
+\author[aff1]{Andrea MAnzoni}
+% \ead{andrea1.manzoni@polimi.it}
+
+\author[aff4]{Steven Brunton}
+% \ead{sbrunton@uw.edu}
+
+\cortext[cor1]{Corresponding author}
+\address[aff1]{Politecnico di Milano, MOX - Dept. of Mathematics, p.za Leonardo da Vinci, 32, Milano, 20133, Italy}
+\address[aff2]{AI Institute in Dynamic Systems, University of Washington, Seattle, USA}
+\address[aff3]{Politecnico di Milano, Dept. of Civil and Environmental Engineering, p.za Leonardo da Vinci, 32, Milano, 20133, Italy}
+\address[aff4]{Department of Mechanical Engineering, University of Washington, Seattle, Washington 98195, USA}
+
+%---------------------------------------------------------
+% ABSTRACT & KEYWORDS
+%---------------------------------------------------------
+\input{abstract.tex}
+
+\begin{keyword}
+Learning analytics \sep Data science \sep Educational data mining \sep Predictive modeling
+\end{keyword}
+
+\end{frontmatter}
+
+%=========================================================
+% INTRODUCTION
+%=========================================================
+\section{Introduction}
+
+Learning analytics has emerged as a data-driven approach to improving educational practice and policy.
+
+%=========================================================
+% METHODS
+%=========================================================
+\section{Methods}
+
+Describe your dataset, preprocessing, modeling pipeline, and evaluation criteria here.
+
+\begin{equation}
+  y = \beta_0 + \beta_1 x + \varepsilon
+\end{equation}
+
+%=========================================================
+% RESULTS
+%=========================================================
+\section{Results}
+
+Summarize and interpret the findings. Example figure inclusion:
+
+% \begin{figure}[h!]
+%   \centering
+%   \includegraphics[width=0.8\textwidth]{figures/example.pdf}
+%   \caption{Example of a result figure.}
+%   \label{fig:example}
+% \end{figure}
+
+%=========================================================
+% DISCUSSION
+%=========================================================
+\section{Discussion}
+
+Discuss implications and limitations. Compare your findings with existing work.
+
+%=========================================================
+% CONCLUSION
+%=========================================================
+\section{Conclusion}
+
+Provide a concise summary of the main outcomes and suggestions for future work.
+
+%=========================================================
+% REFERENCES
+%=========================================================
+\bibliography{references}
+
+\end{document}

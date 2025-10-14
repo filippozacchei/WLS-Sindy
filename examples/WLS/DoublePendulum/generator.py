@@ -16,7 +16,7 @@ from pathlib import Path
 # -------------------------------
 # Dynamical system
 # -------------------------------
-def f(y, g=9.81, L=1.0, m=1.0, c1=0.07, c2=0.07):
+def f(y, g=9.81, L=1.0, m=1.0, c1=0.0, c2=0.0):
     """
     Compute the time derivatives for a planar double pendulum with viscous damping.
 
@@ -150,18 +150,17 @@ def generate_dataset(
 
     for y0 in y0s:
         t, Y_true = simulate(y0, T, dt)
+        all_trues.append(Y_true)
         
         # High-fidelity
         for _ in range(n_hf):
             Y_noisy = Y_true + rng.normal(scale=noise_hf, size=Y_true.shape)
-            all_trues.append(Y_true)
             all_noisy.append(Y_noisy)
             all_sigma.append(noise_hf)
 
         # Low-fidelity
         for _ in range(n_lf):
             Y_noisy = Y_true + rng.normal(scale=noise_lf, size=Y_true.shape)
-            all_trues.append(Y_true)
             all_noisy.append(Y_noisy)
             all_sigma.append(noise_lf)
 
@@ -187,80 +186,21 @@ def generate_dataset(
         Y_noisy=all_noisy,
         sigma=all_sigma,
     )
-
-def plot_last_pair(data, noise_hf, noise_lf, save_dir="./plots", fname="double_pendulum_HF_vs_LF"):
-    os.makedirs(save_dir, exist_ok=True)
-
-    mask_HF = data["sigma"] == noise_hf
-    mask_LF = data["sigma"] == noise_lf
-    idx_HF = np.where(mask_HF)[0][-1]
-    idx_LF = np.where(mask_LF)[0][-1]
-
-    t = data["t"]
-    Y_HF = data["Y_noisy"][idx_HF]
-    Y_LF = data["Y_noisy"][idx_LF]
-    Y_true = data["Y_true"][idx_HF]
-
-    plt.rcParams.update({
-        "font.size": 11,
-        "axes.labelsize": 11,
-        "axes.titlesize": 12,
-        "lines.linewidth": 1.5,
-        "legend.fontsize": 9,
-        "figure.dpi": 150,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-    })
-
-    fig, axs = plt.subplots(2, 2, figsize=(18, 7), sharex=True)
-    axs[0,0].plot(t, Y_LF[:, 0], '.', markersize=1, color="red", alpha=0.7, label="LF sensor")
-    axs[0,0].plot(t, Y_HF[:, 0], '-', color="green", alpha=0.8, label="HF sensor")
-    axs[0,0].plot(t, Y_true[:, 0], "--k", lw=1.2, label=r"$\theta_1$ true")
-    axs[0,0].set_ylabel(r"$\theta_1$ [rad]")
-    axs[0,0].legend(frameon=False, loc="upper right")
-
-    axs[1,0].plot(t, Y_LF[:, 1], '.', markersize=1, color="red", alpha=0.7, label="LF sensor")
-    axs[1,0].plot(t, Y_HF[:, 1], '-', color="green", alpha=0.8, label="HF sensor")
-    axs[1,0].plot(t, Y_true[:, 1], "--k", lw=1.2, label=r"$\theta_2$ true")
-    axs[1,0].set_xlabel("Time [s]")
-    axs[1,0].set_ylabel(r"$\theta_2$ [rad]")
-    axs[1,0].legend(frameon=False, loc="upper right")
-    
-    axs[0,1].plot(t, Y_LF[:, 2], '.', markersize=1, color="red", alpha=0.7, label="LF sensor")
-    axs[0,1].plot(t, Y_HF[:, 2], '-', color="green", alpha=0.8, label="HF sensor")
-    axs[0,1].plot(t, Y_true[:, 2], "--k", lw=1.2, label=r"$\omega_1$ true")
-    axs[0,1].set_ylabel(r"$\omega_1$ [rad]")
-    axs[0,1].legend(frameon=False, loc="upper right")
-
-    axs[1,1].plot(t, Y_LF[:, 3], '.', markersize=1, color="red", alpha=0.7, label="LF sensor")
-    axs[1,1].plot(t, Y_HF[:, 3], '-', color="green", alpha=0.8, label="HF sensor")
-    axs[1,1].plot(t, Y_true[:, 3], "--k", lw=1.2, label=r"$\omega_2$ true")
-    axs[1,1].set_xlabel("Time [s]")
-    axs[1,1].set_ylabel(r"$\omega_2$ [rad]")
-    axs[1,1].legend(frameon=False, loc="upper right")
-
-    plt.tight_layout()
-    for ext in ["png", "pdf"]:
-        path = os.path.join(save_dir, f"{fname}.{ext}")
-        plt.savefig(path, bbox_inches="tight")
-        print(f"Saved figure → {path}")
-
-    plt.show()
     
 if __name__ == "__main__":
     # Parameters
     rng = np.random.default_rng(0)
-    n_ic = 2
-    n_lf = 2
-    n_hf = 20
-    noise_lf = 0.001
-    noise_hf = 0.001
-    T = 1.0
+    n_ic = 125
+    n_lf = 10
+    n_hf = 1
+    noise_lf = 0.5
+    noise_hf = 0.05
+    T = 5.0
     dt = 1 / 1000
 
     # Random initial conditions: [θ₁, θ₂, ω₁, ω₂]
     y0s = [
-        rng.uniform(low=[-1.5, -1.5, -1.0, -1.0], high=[1.5, 1.5, 1.0, 1.0])
+        rng.uniform(low=[-np.pi/2, -np.pi/2, -np.pi/2, -np.pi/2], high=[np.pi/2, np.pi/2, np.pi/2, np.pi/2])
         for _ in range(n_ic)
     ]
 
@@ -291,6 +231,3 @@ if __name__ == "__main__":
     with open("./data/metadata.json", "w") as f:
         json.dump(meta, f, indent=4)
     print("Saved metadata → ./data/metadata.json")
-
-    # Plot one example (last HF vs LF)
-    plot_last_pair(data, noise_hf, noise_lf, save_dir="./plots")
