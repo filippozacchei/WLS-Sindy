@@ -7,6 +7,7 @@ import random
 import os
 import sys
 import pysindy as ps
+
 # Add local PySINDy path so Python can find your development version
 from pysindy.feature_library import WeightedWeakPDELibrary
 import warnings 
@@ -54,13 +55,12 @@ def run_sindy_experiment(Y_train, Y_true, library, weights=None):
     """Train SINDy model and return mean R² on acceleration (last two components)."""
 
     # --- Weighted Weak PDE Library for training ---
-
-
-    optimizer = ps.STLSQ(threshold=threshold)
-    #     bagging=True,
-    #     n_models=100,
-    # )
-
+    optimizer = ps.EnsembleOptimizer(
+        ps.STLSQ(threshold=threshold),
+        bagging=True,
+        n_models=n_models,
+    )
+    
     model = ps.SINDy(feature_library=library, optimizer=optimizer)
     model.fit(Y_train, t=dt, sample_weight=weights)
 
@@ -110,6 +110,7 @@ for ratio in train_ratios:
         p=2, K=K
     )
     for i in range(n_models):
+        print(i)
         # Random sampling indices
         idx_hf = np.random.choice(len(Y_hf_sel), int(ratio * len(Y_hf_sel)), replace=False)
         idx_lf = [10*i + j for i in idx_hf for j in range(10)]

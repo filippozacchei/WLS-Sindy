@@ -1,0 +1,49 @@
+\section{Part 1: Multi-fidelity trajectories}
+
+In this section, we generate and analyse trajectories from three canonical dynamical systems of increasing complexity. These datasets are employed to evaluate the multi-fidelity Sparse Identification of Nonlinear Dynamics (SINDy) framework.
+
+\subsection{Lorenz System}
+
+The Lorenz system \cite{lorenz1963deterministic} is a three-dimensional autonomous system that exhibits chaotic behaviour for certain parameter regimes. It is defined as:
+\begin{equation}
+\begin{aligned}
+\dot{x} &= \sigma (y - x), \\
+\dot{y} &= x(\rho - z) - y, \\
+\dot{z} &= xy - \beta z,
+\end{aligned}
+\label{eq:lorenz}
+\end{equation}
+where $\sigma$, $\rho$, and $\beta$ are the Prandtl, Rayleigh, and geometric parameters, respectively. In the classical chaotic regime, the parameters are set to $\sigma = 10$, $\rho = 28$, and $\beta = 8/3$.
+
+\subsection{Double Pendulum}
+
+The double pendulum is a well-known example of a nonlinear, chaotic mechanical system consisting of two point masses connected by rigid, massless rods. The dynamics are governed by the following coupled second-order equations:
+\begin{equation}
+\begin{aligned}
+(m_1 + m_2) l_1 \ddot{\theta}_1 + m_2 l_2 \ddot{\theta}_2 \cos(\theta_1 - \theta_2)
++ m_2 l_2 \dot{\theta}_2^2 \sin(\theta_1 - \theta_2)
++ (m_1 + m_2) g \sin \theta_1 &= 0, \\
+m_2 l_2 \ddot{\theta}_2 + m_2 l_1 \ddot{\theta}_1 \cos(\theta_1 - \theta_2)
+- m_2 l_1 \dot{\theta}_1^2 \sin(\theta_1 - \theta_2)
++ m_2 g \sin \theta_2 &= 0,
+\end{aligned}
+\label{eq:double_pendulum}
+\end{equation}
+where $\theta_1$ and $\theta_2$ are the angular displacements of the two pendulums, $l_1$ and $l_2$ are their lengths, $m_1$ and $m_2$ are their masses, and $g$ is the gravitational acceleration.
+
+For numerical simulations, it is often convenient to express this as a first-order system by introducing angular velocities $\omega_i = \dot{\theta}_i$, such that $\dot{\theta}_i = \omega_i$ and $\dot{\omega}_i = f_i(\theta_1, \theta_2, \omega_1, \omega_2)$.
+
+\subsection{Compressible Flow: Isothermal Navier–Stokes}
+
+The one-dimensional isothermal compressible Navier–Stokes equations describe the evolution of a compressible fluid with constant temperature. They are expressed as:
+\begin{equation}
+\begin{aligned}
+\frac{\partial \rho}{\partial t} + \frac{\partial (\rho u)}{\partial x} &= 0, \\
+\frac{\partial (\rho u)}{\partial t} + \frac{\partial (\rho u^2 + c^2 \rho)}{\partial x} &= 
+\frac{\partial}{\partial x} \left( \mu \frac{\partial u}{\partial x} \right),
+\end{aligned}
+\label{eq:isothermal_ns}
+\end{equation}
+where $\rho(x,t)$ is the density field, $u(x,t)$ the velocity field, $c$ the isothermal speed of sound, and $\mu$ the dynamic viscosity. The first equation represents conservation of mass, and the second represents conservation of momentum.
+
+These equations can also be non-dimensionalised using reference quantities $\rho_0$, $u_0$, and $L_0$, introducing the Reynolds number $\mathrm{Re} = \rho_0 u_0 L_0 / \mu$ and Mach number $\mathrm{Ma} = u_0 / c$.

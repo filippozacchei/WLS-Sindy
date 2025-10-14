@@ -18,7 +18,7 @@ from typing import Optional, List, Dict, Tuple
 from scipy.integrate import solve_ivp
 from scipy.stats import qmc
 from sklearn.metrics import mean_squared_error
-
+from tqdm import tqdm
 
 # ---------------------------------------------------------------------
 # Dynamical system definition
@@ -118,7 +118,8 @@ def generate_dataset(
     Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
 
     dataset: Dict[Tuple[int, int, int, float, float], Dict] = {}
-    param_grid = itertools.product(n_hf_list, n_lf_list, noise_hf_list, noise_lf_list)
+    # Create reusable parameter combinations
+    param_grid = list(itertools.product(n_hf_list, n_lf_list, noise_hf_list, noise_lf_list))
 
     t, x1 = simulate([-10,-10,25], 15, 1e-3)
     rmse = np.sqrt(mean_squared_error(x1, np.zeros_like(x1)))
@@ -127,7 +128,7 @@ def generate_dataset(
     for run in range(n_runs):
         print(f"\n[Run {run+1}/{n_runs}] Generating independent ICs for HF/LF pools.")
 
-        for n_hf, n_lf, noise_hf, noise_lf in param_grid:
+        for n_hf, n_lf, noise_hf, noise_lf in tqdm(param_grid):
             key = (run, n_hf, n_lf, noise_hf, noise_lf)
             # print(f" → Config HF={n_hf}, LF={n_lf}, σ_HF={noise_hf}%, σ_LF={noise_lf}%")
 
@@ -200,15 +201,15 @@ if __name__ == "__main__":
     output_dir.mkdir(exist_ok=True)
 
     config = dict(
-        n_hf_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20],
+        n_hf_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
         n_lf_list=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
-        noise_hf_list=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-        noise_lf_list=[10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0],
-        n_runs=100,
+        noise_hf_list=[1.0, 5.0],
+        noise_lf_list=[10.0, 25.0, 50.0],
+        n_runs=5,
         T=0.1,
         dt=1e-3,
         seed=42,
-        out_path=str(output_dir / "lorenz_dataset.npz"),
+        out_path=str(output_dir / "lorenz_dataset_trajectories_short.npz"),
     )
 
     print("\n=== Lorenz Dataset Generation ===")
@@ -228,5 +229,5 @@ if __name__ == "__main__":
         json.dump(metadata, f, indent=4)
 
     print("\n✅ Dataset and metadata saved successfully.")
-    print(f"→ Dataset:   {output_dir / 'lorenz_dataset.npz'}")
+    print(f"→ Dataset:   {output_dir / 'lorenz_dataset_all.npz'}")
     print(f"→ Metadata:  {output_dir / 'metadata.json'}")
