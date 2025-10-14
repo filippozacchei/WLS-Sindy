@@ -16,4 +16,5 @@ Presentations/*
 *.pdf
 *.jpeg
 *.svg
+*media*
 examples/WLS/Lorenz/lorenz_sindy.py
