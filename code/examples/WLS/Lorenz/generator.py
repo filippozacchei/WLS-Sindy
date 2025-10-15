@@ -84,12 +84,11 @@ def generate_lorenz_trajectory(
 # ---------------------------------------------------------------------
 # Multi-trajectory generator (for LF/HF/MF)
 # ---------------------------------------------------------------------
-def generate_lorenz_flows(
+def generate_lorenz_data(
     n_traj=1,
     T=10.0,
     dt=1e-3,
     noise_level=0.0,
-    fidelity="hf",
     seed=42,
     sigma=10.0,
     rho=28.0,

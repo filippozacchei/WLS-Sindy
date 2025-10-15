@@ -28,8 +28,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pathlib import Path
 import matplotlib as mpl
+from sklearn.metrics import mean_squared_error
 
-from generator import generate_lorenz_flows
+
+from generator import generate_lorenz_data
 
 import warnings 
 warnings.filterwarnings("ignore")
@@ -71,7 +73,7 @@ def plot_heatmap(
     cmap="magma",
     fname=None,
     label=r"$R^2$",
-    annotate=True,
+    annotate=False,
     fmt=".2f",
 ):
     """
@@ -126,7 +128,6 @@ def plot_heatmap(
     ax.set_yticklabels(n_lf_vals)
     ax.set_xlabel(r"$n_{\mathrm{HF}}$")
     ax.set_ylabel(r"$n_{\mathrm{LF}}$")
-    ax.set_title(title, pad=6)
 
     # --- Add gridlines for clarity ---
     ax.set_xticks(np.arange(-0.5, len(n_hf_vals), 1), minor=True)
@@ -169,14 +170,20 @@ def evaluate_grid(
     Path(out_dir).mkdir(exist_ok=True)
 
     mf_score = np.full((len(n_lf_vals), len(n_hf_vals)), np.nan)
+    lf_score = np.full_like(mf_score, np.nan)
+    hf_score = np.full_like(mf_score, np.nan)    
     dlf_score = np.full_like(mf_score, np.nan)
     dhf_score = np.full_like(mf_score, np.nan)
 
     mf_mad = np.full_like(mf_score, np.nan)
+    lf_mad = np.full_like(mf_score, np.nan)
+    hf_mad = np.full_like(mf_score, np.nan)    
     dlf_mad = np.full_like(mf_score, np.nan)
     dhf_mad = np.full_like(mf_score, np.nan)
 
     mf_dis = np.full_like(mf_score, np.nan)
+    lf_dis = np.full_like(mf_score, np.nan)
+    hf_dis = np.full_like(mf_score, np.nan)    
     dlf_dis = np.full_like(mf_score, np.nan)
     dhf_dis = np.full_like(mf_score, np.nan)
 
@@ -191,8 +198,9 @@ def evaluate_grid(
     C_true[2, 2] = -8.0/3.0  # z
 
     # Test data (for R²)
-    X_test, Xdot_test, t_test = generate_lorenz_flows(n_traj=1, noise_level=0.0, seed=999)
-
+    X_test, Xdot_test, t_test = generate_lorenz_data(n_traj=1, noise_level=0.0, seed=999)
+    std_per_dim = np.std(X_test[0])
+    
     for i, n_lf in enumerate(tqdm(n_lf_vals, desc="LF grid")):
         for j, n_hf in enumerate(n_hf_vals):
             r2_mf_runs, r2_lf_runs, r2_hf_runs = [], [], []
@@ -201,8 +209,8 @@ def evaluate_grid(
 
             for run in range(runs):
                 # Generate LF, HF trajectories
-                X_hf, _, t_hf = generate_lorenz_flows(n_hf, noise_level=0.01, T=0.1, seed=run)
-                X_lf, _, t_lf = generate_lorenz_flows(n_lf, noise_level=0.1, T=0.1, seed=run + 100)
+                X_hf, _, t_hf = generate_lorenz_data(n_hf, noise_level=0.025*std_per_dim, T=0.1, seed=run)
+                X_lf, _, t_lf = generate_lorenz_data(n_lf, noise_level=0.25*std_per_dim, T=0.1, seed=run + 100)
 
                 X_mf = X_hf + X_lf
                 t_mf = t_hf + t_lf
@@ -236,8 +244,8 @@ def evaluate_grid(
                 eval_model_mf.fit([X_hf[0]], t=dt)
                 
                 opt_eval_hf.coef_ = opt_hf.coef_
-                opt_eval_lf.coef_ = opt_mf.coef_
-                opt_eval_mf.coef_ = opt_lf.coef_
+                opt_eval_lf.coef_ = opt_lf.coef_
+                opt_eval_mf.coef_ = opt_mf.coef_
 
                 # Evaluate
                 r2_hf = eval_model_hf.score(X_test, t=dt)
@@ -266,31 +274,66 @@ def evaluate_grid(
                 dis_lf_runs.append(dis_lf)
                 dis_mf_runs.append(dis_mf)
 
+    
             # Aggregate medians across runs
             mf_score[i, j] = np.median(r2_mf_runs)
+            lf_score[i, j] = np.median(np.array(r2_lf_runs))
+            hf_score[i, j] = np.median(np.array(r2_hf_runs))            
             dlf_score[i, j] = np.median(np.array(r2_mf_runs) - np.array(r2_lf_runs))
             dhf_score[i, j] = np.median(np.array(r2_mf_runs) - np.array(r2_hf_runs))
 
             mf_mad[i, j] = np.median(mad_mf_runs)
+            lf_mad[i, j] = np.median(np.array(mad_lf_runs))
+            hf_mad[i, j] = np.median(np.array(mad_hf_runs))
             dlf_mad[i, j] = np.median(np.array(mad_mf_runs) - np.array(mad_lf_runs))
             dhf_mad[i, j] = np.median(np.array(mad_mf_runs) - np.array(mad_hf_runs))
 
             mf_dis[i, j] = np.median(dis_mf_runs)
+            lf_dis[i, j] = np.median(np.array(dis_lf_runs))
+            hf_dis[i, j] = np.median(np.array(dis_hf_runs))            
             dlf_dis[i, j] = np.median(np.array(dis_mf_runs) - np.array(dis_lf_runs))
             dhf_dis[i, j] = np.median(np.array(dis_mf_runs) - np.array(dis_hf_runs))
+            
+    np.savez_compressed(
+        Path(out_dir) / "lorenz_results.npz",
+        n_lf_vals=n_lf_vals,
+        n_hf_vals=n_hf_vals,
+        mf_score=mf_score,
+        lf_score=lf_score,
+        hf_score=hf_score,
+        dlf_score=dlf_score,
+        dhf_score=dhf_score,
+        mf_mad=mf_mad,
+        lf_mad=lf_mad,
+        hf_mad=hf_mad,
+        dlf_mad=dlf_mad,
+        dhf_mad=dhf_mad,
+        mf_dis=mf_dis,
+        lf_dis=lf_dis,
+        hf_dis=hf_dis,
+        dlf_dis=dlf_dis,
+        dhf_dis=dhf_dis,
+    )
+    print("✅ Saved data arrays →", Path(out_dir) / "lorenz_results.npz")
 
     # -----------------------------------------------------------------
     # Plot results
     # -----------------------------------------------------------------
-    plot_heatmap(mf_score, "MF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_mf.png")
-    plot_heatmap(dlf_score, "MF−LF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_mf_minus_lf.png")
-    plot_heatmap(dhf_score, "MF−HF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_mf_minus_hf.png")
+    plot_heatmap(np.clip(mf_score,a_min=0,a_max=None), "MF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_mf.png")
+    plot_heatmap(np.clip(lf_score,a_min=0,a_max=None), "LF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_lf.png")
+    plot_heatmap(np.clip(hf_score,a_min=0,a_max=None), "HF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_hf.png")
+    plot_heatmap(np.clip(dlf_score,a_min=None,a_max=1), "MF−LF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_mf_minus_lf.png")
+    plot_heatmap(np.clip(dhf_score,a_min=None,a_max=1), "MF−HF $R^2$", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"scores_mf_minus_hf.png")
 
     plot_heatmap(mf_mad, "MF MAD", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"mad_mf.png", label="MAD")
+    plot_heatmap(lf_mad, "MF−LF MAD", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"mad_lf.png", label="MAD")
+    plot_heatmap(hf_mad, "MF−HF MAD", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"mad_hf.png", label="MAD")
     plot_heatmap(dlf_mad, "MF−LF MAD", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"mad_mf_minus_lf.png", label="ΔMAD")
     plot_heatmap(dhf_mad, "MF−HF MAD", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"mad_mf_minus_hf.png", label="ΔMAD")
 
     plot_heatmap(mf_dis, "MF Disagreement", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"dis_mf.png", label="Disagreement")
+    plot_heatmap(lf_dis, "LF Disagreement", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"dis_lf.png", label="Disagreement")
+    plot_heatmap(hf_dis, "HF Disagreement", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"dis_mf_hf.png", label="Disagreement")    
     plot_heatmap(dlf_dis, "MF−LF Disagreement", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"dis_mf_minus_lf.png", label="ΔDisagreement")
     plot_heatmap(dhf_dis, "MF−HF Disagreement", n_lf_vals, n_hf_vals, fname=Path(out_dir)/"dis_mf_minus_hf.png", label="ΔDisagreement")
 
@@ -301,6 +344,6 @@ def evaluate_grid(
 # Entry point
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
-    n_lf_vals = np.arange(5, 55, 5)
+    n_lf_vals = np.arange(10, 101, 10)
     n_hf_vals = np.arange(1, 11, 1)
-    evaluate_grid(n_lf_vals, n_hf_vals, runs=2)
+    evaluate_grid(n_lf_vals, n_hf_vals, runs=25)

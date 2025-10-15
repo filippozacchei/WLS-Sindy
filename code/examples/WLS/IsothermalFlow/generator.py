@@ -14,34 +14,70 @@ from scipy.integrate import solve_ivp
 # Compressible isothermal Navier–Stokes in 2D
 # ---------------------------------------------------------------------
 def compressible(t, U, dx, N, mu, RT):
-    """RHS of the 2D isothermal compressible Navier–Stokes equations."""
     u = U.reshape(N, N, 3)[:, :, 0]
     v = U.reshape(N, N, 3)[:, :, 1]
     rho = U.reshape(N, N, 3)[:, :, 2]
-
-    fd = ps.differentiation.FiniteDifference
-    ux = fd(d=1, axis=0, periodic=True)._differentiate(u, dx)
-    uy = fd(d=1, axis=1, periodic=True)._differentiate(u, dx)
-    vx = fd(d=1, axis=0, periodic=True)._differentiate(v, dx)
-    vy = fd(d=1, axis=1, periodic=True)._differentiate(v, dx)
-    uxx = fd(d=2, axis=0, periodic=True)._differentiate(u, dx)
-    uyy = fd(d=2, axis=1, periodic=True)._differentiate(u, dx)
-    vxx = fd(d=2, axis=0, periodic=True)._differentiate(v, dx)
-    vyy = fd(d=2, axis=1, periodic=True)._differentiate(v, dx)
-    px = fd(d=1, axis=0, periodic=True)._differentiate(rho * RT, dx)
-    py = fd(d=1, axis=1, periodic=True)._differentiate(rho * RT, dx)
-
+    ux = ps.differentiation.FiniteDifference(
+        d=1,
+        axis=0,
+        periodic=True,
+    )._differentiate(u, dx)
+    uy = ps.differentiation.FiniteDifference(
+        d=1,
+        axis=1,
+        periodic=True,
+    )._differentiate(u, dx)
+    uxx = ps.differentiation.FiniteDifference(
+        d=2,
+        axis=0,
+        periodic=True,
+    )._differentiate(u, dx)
+    uyy = ps.differentiation.FiniteDifference(
+        d=2,
+        axis=1,
+        periodic=True,
+    )._differentiate(u, dx)
+    vx = ps.differentiation.FiniteDifference(
+        d=1,
+        axis=0,
+        periodic=True,
+    )._differentiate(v, dx)
+    vy = ps.differentiation.FiniteDifference(
+        d=1,
+        axis=1,
+        periodic=True,
+    )._differentiate(v, dx)
+    vxx = ps.differentiation.FiniteDifference(
+        d=2,
+        axis=0,
+        periodic=True,
+    )._differentiate(v, dx)
+    vyy = ps.differentiation.FiniteDifference(
+        d=2,
+        axis=1,
+        periodic=True,
+    )._differentiate(v, dx)
+    px = ps.differentiation.FiniteDifference(
+        d=1,
+        axis=0,
+        periodic=True,
+    )._differentiate(rho * RT, dx)
+    py = ps.differentiation.FiniteDifference(
+        d=1,
+        axis=1,
+        periodic=True,
+    )._differentiate(rho * RT, dx)
     ret = np.zeros((N, N, 3))
     ret[:, :, 0] = -(u * ux + v * uy) - (px - mu * (uxx + uyy)) / rho
     ret[:, :, 1] = -(u * vx + v * vy) - (py - mu * (vxx + vyy)) / rho
     ret[:, :, 2] = -(u * px / RT + v * py / RT + rho * ux + rho * vy)
-    return ret.reshape(-1)
+    return ret.reshape(3 * N * N)
 
 
 # ---------------------------------------------------------------------
 # Initial condition generator
 # ---------------------------------------------------------------------
-def make_initial_condition(X, Y, L, ic_type="taylor-green", perturb_scale=0.05):
+def make_initial_condition(X, Y, L, ic_type="taylor-green", perturb_scale=0.0):
     """Return (U0, V0, RHO0) for a chosen flow configuration."""
     if ic_type == "taylor-green":
         U0 = np.sin(2 * np.pi * X / L) * np.cos(2 * np.pi * Y / L)
@@ -50,6 +86,7 @@ def make_initial_condition(X, Y, L, ic_type="taylor-green", perturb_scale=0.05):
         perturb = perturb_scale * np.exp(-((X - L / 2) ** 2 + (Y - L / 2) ** 2) / (0.1 * L) ** 2)
         U0 += perturb
         V0 -= perturb
+        
 
     elif ic_type == "shear-layer":
         U0 = np.tanh((Y - L / 2) / 0.1)
@@ -119,10 +156,26 @@ def generate_compressible_flow(
     ts = []
 
     for i in range(n_traj):
+        print(i)
         # Slightly randomize the initial condition
         U0, V0, RHO0 = make_initial_condition(X, Y, L, ic_type=initial_condition)
         noise_ic = 0.01 * rng.standard_normal((N, N, 3))
         y0 = np.stack([U0, V0, RHO0], axis=-1) + noise_ic
+        y0 = np.zeros((N, N, 3))
+        y0[:, :, 0] = (
+            -np.sin(2 * np.pi / L * x)[:, np.newaxis]
+            + 0.5 * np.cos(2 * 2 * np.pi / L * y)[np.newaxis, :]
+        )
+        y0[:, :, 1] = (
+            0.5 * np.cos(2 * np.pi / L * x)[:, np.newaxis]
+            - np.sin(2 * 2 * np.pi / L * y)[np.newaxis, :]
+        )
+        y0[:, :, 2] = (
+            1
+            + 0.5
+            * np.cos(2 * np.pi / L * x)[:, np.newaxis]
+            * np.cos(2 * 2 * np.pi / L * y)[np.newaxis, :]
+        )
 
         sol = solve_ivp(
             compressible,

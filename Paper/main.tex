@@ -3,6 +3,9 @@
 %=========================================================
 \documentclass[final,3p,10.5pt]{elsarticle}
 \geometry{margin=1in}
+% Journal of the Royal Society
+% 2/3 times metting before aps 
+% Summary Figure - Overview Figure
 % Options: review, 1p, 3p, 5p, twocolumn, authoryear, number
 
 %---------------------------------------------------------
@@ -34,7 +37,11 @@
 
 \begin{frontmatter}
 
-\title{Weighted SINDy: Sparse Discovery of Nonlinear Dynamical Systems with Fidelity-Weighted Measurements}
+\title{Multi-Fidelity SINDy: Sparse Discovery of Nonlinear Dynamical Systems with Fidelity-Weighted Measurements}
+% Multi fidelity: ... or non linear modelling 
+% Sparse Nonlnear Modelling with multi fidelity data
+% Second Title: Multi Fidelity sindy for Multi Modal
+
 
 \author[aff1]{Filippo Zacchei\corref{cor1}}
 \ead{filippo.zacchei@polimi.it}
@@ -45,10 +52,10 @@
 \author[aff3]{Attilio Frangi}
 % \ead{attilio.frangi@polimi.it}
 
-\author[aff1]{Andrea MAnzoni}
+\author[aff1]{Andrea Manzoni}
 % \ead{andrea1.manzoni@polimi.it}
 
-\author[aff4]{Steven Brunton}
+\author[aff4]{Steven L. Brunton}
 % \ead{sbrunton@uw.edu}
 
 \cortext[cor1]{Corresponding author}
@@ -61,10 +68,12 @@
 % ABSTRACT & KEYWORDS
 %---------------------------------------------------------
 \input{abstract.tex}
+% There is a progression 
 
-\begin{keyword}
-Learning analytics \sep Data science \sep Educational data mining \sep Predictive modeling
-\end{keyword}
+
+% \begin{keyword}
+% Learning analytics \sep Data science \sep Educational data mining \sep Predictive modeling
+% \end{keyword}
 
 \end{frontmatter}
 
@@ -72,12 +81,42 @@ Learning analytics \sep Data science \sep Educational data mining \sep Predictiv
 % INTRODUCTION
 %=========================================================
 \section{Introduction}
+\begin{enumerate}
+    \item First Paragraph (Surrogate Models for Digitial Twin MOdel BAsed Engineering)
+        \begin{itemize}
+            \item Why is this interesting and Important
+            \item Why is it Challenging (go in details of what makes it challeging)
+            \item Challenges found by previous works
+            \item WHat changed for us today
+            \item In this work we do
+        \end{itemize}
+    \item Second PAragraph - Third *Literature*: 50 papers
+    \begin{itemize}
+        \item Surrogates for Digital twins with multi fidelity data
+        \item Difference from standard auto-regressive and using only one surrogate 
+        \item Sindy for Surrogate modeling : pros (flexibility for control physics data limits) and lack of multi fidelity
+    \end{itemize}
+    \item Paragraph 4: what we do, expanding last bullet of first paragraph
+\end{enumerate}
+
+\begin{figure}
+    \includegraphics[width=\textwidth]{Figure/figure1.png}
+\end{figure}
 
 %=========================================================
 % METHODS
 %=========================================================
-\section{Methodology}
+\section{Background}
+\subsection{Sparse Identification of Dynamical Systems}
+\begin{itemize}
+    \item STLSQ
+    \item Kaptanoglu (Stability) - Loiseau JC (Constrained SR3) for modifying Least Squares
+\end{itemize}
+\subsection{Ensemble - Weak Sindy}
+\subsection{Weighted Least Squares}
 
+\section{Methodology}
+% MEthods 
 
 %=========================================================
 % RESULTS
@@ -86,12 +125,23 @@ Learning analytics \sep Data science \sep Educational data mining \sep Predictiv
 \input{result.tex}
  \nocite{*}
 
+
+Include Summaries for results for both part 1 and 2
+The blocks of the summaries should resemble the flow of the methodology figures
+Make independent plots and use keynote for reorganizing
+Liuterature review guids presentaiton of the resutls
+
 %=========================================================
 % DISCUSSION
 %=========================================================
 \section{Discussion}
+% Combine with results and conclusion
 
-Discuss implications and limitations. Compare your findings with existing work.
+Follow the outline of the introduction, giving more takeways
+Limitations (Bias, Different DoFs simulations)
+Future Directions 
+Discuss implications and limitations. 
+Compare your findings with existing work.
 
 %=========================================================
 % CONCLUSION

@@ -15,6 +15,17 @@ The Lorenz system is a three-dimensional autonomous system that exhibits chaotic
 \end{equation}
 where $\sigma$, $\rho$, and $\beta$ are the Prandtl, Rayleigh, and geometric parameters, respectively. In the classical chaotic regime, the parameters are set to $\sigma = 10$, $\rho = 28$, and $\beta = 8/3$.
 
+\begin{figure}
+    \includegraphics[width=\textwidth]{Figure/lorenz1.png}
+\end{figure}
+
+\begin{figure}
+    \begin{center}
+    \includegraphics[width=0.65\textwidth]{Figure/lorenzdx.png}
+    \includegraphics[width=0.65\textwidth]{Figure/lorenzdy.png}
+    \includegraphics[width=0.65\textwidth]{Figure/lorenzdz.png}
+    \end{center}
+\end{figure}
 \subsection{Double Pendulum}
 
 The double pendulum is a canonical example of a nonlinear, chaotic mechanical system consisting of two point masses connected by massless rigid rods. The equations of motion arise from the Lagrangian formulation and can be expressed as:
@@ -59,6 +70,20 @@ For system identification, it is convenient to express the dynamics by defining 
 \end{equation}
 
 This formulation highlights the system’s strong nonlinearity and coupling between angular positions and velocities, making it a standard benchmark for data-driven discovery of dynamics.
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=\textwidth]{Figure/doublependulum_multifidelity.png}
+    \end{center}
+\end{figure}
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.33\textwidth]{Figure/heatmap_hf_r2.png}%
+        \includegraphics[width=0.33\textwidth]{Figure/heatmap_lf_r2.png}%
+        \includegraphics[width=0.33\textwidth]{Figure/heatmap_mf_r2.png}
+    \end{center}
+\end{figure}
 \subsection{Compressible Flow: Isothermal Navier–Stokes}
 
 The one-dimensional isothermal compressible Navier–Stokes equations describe the evolution of a compressible fluid with constant temperature. They are expressed as:
