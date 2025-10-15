@@ -20,17 +20,17 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from generator import generate_compressible_flow, plot_snapshot, animate_field, compare_trajectories
 
-# # Generate multiple trajectories
-# trajectories, grid, ts, L, T = generate_compressible_flow(n_traj=3, N=64, Nt=40, T=0.5, noise_level=0.1)
+# Generate multiple trajectories
+trajectories, grid, ts, L, T = generate_compressible_flow(n_traj=3, N=64, Nt=20, T=0.1, noise_level=0.1)
 
-# # Plot one trajectory snapshot
-# plot_snapshot(trajectories[0], ts[0], L, idx=10, title_prefix="Trajectory 1: ")
+# Plot one trajectory snapshot
+plot_snapshot(trajectories[0], ts[0], L, idx=10, title_prefix="Trajectory 1: ")
 
-# # Animate velocity field
-# animate_field(trajectories[0], ts[0], L, var_index=0, title="Taylor–Green flow", save_path="flow_u.gif")
+# Animate velocity field
+animate_field(trajectories[0], ts[0], L, var_index=0, title="Taylor–Green flow", save_path="flow_u.gif")
 
-# # Compare several trajectories
-# compare_trajectories(trajectories, ts[0], L, component=2, idx=20)
+# Compare several trajectories
+compare_trajectories(trajectories, ts[0], L, component=2, idx=20)
 
 # ---------------------------------------------------------------------
 # Metrics
@@ -114,15 +114,17 @@ def evaluate_grid(
             for run in range(runs):
                 # Generate LF and HF data
                 u_test, grid, t_test, L, T = generate_compressible_flow(
-                    1, N=64, Nt=20, T=0.2, noise_level=0.0, seed=run
+                    1, N=64, Nt=20, T=0.1, noise_level=0.0, seed=run
                 )
-                                
+                print(1)   
                 u_hf, _, t_hf, _, _ = generate_compressible_flow(
-                    n_hf, N=64, Nt=20,  T=0.2, noise_level=0.01, seed=run+runs
+                    n_hf, N=64, Nt=20,  T=0.1, noise_level=0.01, seed=run+runs
                 )
+                print(2)   
                 u_lf, _, t_lf, _, _ = generate_compressible_flow(
-                    n_lf, N=64, Nt=20,  T=0.2, noise_level=0.1, seed=run+2*runs
+                    n_lf, N=64, Nt=20,  T=0.1, noise_level=0.1, seed=run+2*runs
                 )
+                print(3)   
 
                 # Match MF data (combine)
                 u_mf = u_hf + u_lf

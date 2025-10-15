@@ -1,233 +1,184 @@
 """
-Generate Lorenz system trajectories for sparse system identification.
+lorenz_generator.py
 
-Each dataset contains multiple trajectories of the Lorenz system 
-with different initial conditions and controlled noise levels.
-
-Output files:
-    ./data/lorenz_dataset.npz
-    ./data/metadata.json
+Dynamic generator for Lorenz system trajectories.
+Supports low-, high-, or multi-fidelity data generation on the fly.
 """
 
-import os
-import json
-import itertools
 import numpy as np
-from pathlib import Path
-from typing import Optional, List, Dict, Tuple
 from scipy.integrate import solve_ivp
-from scipy.stats import qmc
-from sklearn.metrics import mean_squared_error
-from tqdm import tqdm
+import matplotlib.pyplot as plt
+
 
 # ---------------------------------------------------------------------
-# Dynamical system definition
+# Lorenz equations
 # ---------------------------------------------------------------------
-def lorenz(t, state, sigma=10.0, rho=28.0, beta=8.0 / 3.0):
-    """
-    Standard Lorenz system of equations.
-
-    Parameters
-    ----------
-    t : float
-        Time variable (unused but required by `solve_ivp`).
-    state : ndarray, shape (3,)
-        Current state vector [x, y, z].
-    sigma : float, optional
-        Prandtl number.
-    rho : float, optional
-        Rayleigh number.
-    beta : float, optional
-        Geometric factor.
-
-    Returns
-    -------
-    dydt : ndarray, shape (3,)
-        Time derivatives [dx/dt, dy/dt, dz/dt].
-    """
+def lorenz(t, state, sigma=10.0, rho=28.0, beta=8.0/3.0):
+    """Standard Lorenz system ODEs."""
     x, y, z = state
     dxdt = sigma * (y - x)
     dydt = x * (rho - z) - y
     dzdt = x * y - beta * z
-    return np.array([dxdt, dydt, dzdt])
+    return [dxdt, dydt, dzdt]
 
 
 # ---------------------------------------------------------------------
-# Simulation routine
+# Single trajectory generator
 # ---------------------------------------------------------------------
-def simulate(y0, T=10.0, dt=1e-3, sigma=10.0, rho=28.0, beta=8.0 / 3.0):
+def generate_lorenz_trajectory(
+    y0=None,
+    T=10.0,
+    dt=1e-3,
+    sigma=10.0,
+    rho=28.0,
+    beta=8.0/3.0,
+    noise_level=0.0,
+    seed=None,
+):
     """
-    Integrate the Lorenz system using a stiff solver (LSODA).
+    Generate one Lorenz trajectory (possibly noisy).
 
     Parameters
     ----------
-    y0 : ndarray, shape (3,)
-        Initial condition [x0, y0, z0].
-    T : float, optional
-        Final simulation time.
-    dt : float, optional
-        Time step for saved data.
+    y0 : array-like, shape (3,)
+        Initial condition. Random if None.
+    T : float
+        Total integration time.
+    dt : float
+        Time step.
     sigma, rho, beta : float
-        Lorenz system parameters.
+        Lorenz parameters.
+    noise_level : float
+        Standard deviation of additive Gaussian noise.
+    seed : int, optional
+        Random seed for reproducibility.
 
     Returns
     -------
-    t : ndarray, shape (n_steps,)
+    t : ndarray (Nt,)
         Time vector.
-    Y : ndarray, shape (n_steps, 3)
-        Simulated trajectory.
+    X : ndarray (Nt, 3)
+        Trajectory (x, y, z) with optional noise.
+    Xdot : ndarray (Nt, 3)
+        Time derivatives.
     """
+    rng = np.random.default_rng(seed)
     t = np.arange(0, T, dt)
+
+    if y0 is None:
+        y0 = rng.uniform([-10, -10, 20], [10, 10, 30])
+
     sol = solve_ivp(lorenz, (t[0], t[-1]), y0, t_eval=t,
                     args=(sigma, rho, beta),
                     method="LSODA", rtol=1e-10, atol=1e-12)
-    return sol.t, sol.y.T
+    
+    X = sol.y.T
+    Xdot = np.array([lorenz(ti, xi, sigma, rho, beta) for ti, xi in zip(sol.t, X)])
+    
+    if noise_level > 0:
+        X += rng.normal(0, noise_level, size=X.shape)
+
+    return t, X, Xdot
 
 
 # ---------------------------------------------------------------------
-# Dataset generation
+# Multi-trajectory generator (for LF/HF/MF)
 # ---------------------------------------------------------------------
-def generate_dataset(
-    n_hf_list: List[int],
-    n_lf_list: List[int],
-    noise_hf_list: List[float],
-    noise_lf_list: List[float],
-    n_runs: int,
-    T: float = 10.0,
-    dt: float = 1e-3,
-    seed: int = 42,
-    save_data: bool = True,
-    out_path: str = "./data/lorenz_dataset.npz",
+def generate_lorenz_flows(
+    n_traj=1,
+    T=10.0,
+    dt=1e-3,
+    noise_level=0.0,
+    fidelity="hf",
+    seed=42,
+    sigma=10.0,
+    rho=28.0,
+    beta=8.0/3.0,
 ):
     """
-    Generate Lorenz datasets for all combinations of
-    (n_hf, n_lf, noise_hf, noise_lf) across multiple runs.
+    Generate multiple Lorenz trajectories, analogous to generate_compressible_flow.
 
-    HF and LF trajectories have *different initial conditions*.
-
-    Returns
-    -------
-    dataset : dict
-        Nested dictionary indexed as:
-            dataset[(run, n_hf, n_lf, noise_hf, noise_lf)] = {
-                "hf": (x_list_hf, t_list_hf, ic_hf),
-                "lf": (x_list_lf, t_list_lf, ic_lf),
-            }
+    Parameters
+    ----------
+    n_traj : int
+        Number of trajectories.
+    T : float
+        Total simulation time.
+    dt : float
+        Time step.
+    noise_level : float
+        Gaussian noise level.
+    fidelity : str
+        'lf', 'hf', or 'mf'.
+    seed : int
+        RNG seed.
     """
     rng = np.random.default_rng(seed)
-    Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
+    trajectories, derivatives, times = [], [], []
 
-    dataset: Dict[Tuple[int, int, int, float, float], Dict] = {}
-    # Create reusable parameter combinations
-    param_grid = list(itertools.product(n_hf_list, n_lf_list, noise_hf_list, noise_lf_list))
-
-    t, x1 = simulate([-10,-10,25], 15, 1e-3)
-    rmse = np.sqrt(mean_squared_error(x1, np.zeros_like(x1)))
-    print(rmse)
-
-    for run in range(n_runs):
-        print(f"\n[Run {run+1}/{n_runs}] Generating independent ICs for HF/LF pools.")
-
-        for n_hf, n_lf, noise_hf, noise_lf in tqdm(param_grid):
-            key = (run, n_hf, n_lf, noise_hf, noise_lf)
-            # print(f" → Config HF={n_hf}, LF={n_lf}, σ_HF={noise_hf}%, σ_LF={noise_lf}%")
-
-            # Independent ICs for HF and LF
-            sampler_hf = qmc.LatinHypercube(d=3, seed=seed + run * 1000 + int(noise_hf))
-            sampler_lf = qmc.LatinHypercube(d=3, seed=seed * 10 + run * 1000 + int(noise_lf))
-
-            ic_hf = qmc.scale(sampler_hf.random(n=n_hf), [-10, -10, 20], [10, 10, 30])
-            ic_lf = qmc.scale(sampler_lf.random(n=n_lf), [-10, -10, 20], [10, 10, 30])
-
-            # Generate HF trajectories
-            x_list_hf, t_list_hf = [], []
-            for i, y0 in enumerate(ic_hf):
-                np.random.seed(seed + run + i)
-                t, x_noisy = simulate(y0, T, dt)
-                noise_std = (noise_hf * rmse) / 100.0
-                x_noisy += rng.normal(0.0, noise_std, size=x_noisy.shape)                
-
-                x_list_hf.append(x_noisy)
-                t_list_hf.append(t)
-
-            # Generate LF trajectories
-            x_list_lf, t_list_lf = [], []
-            for j, y0 in enumerate(ic_lf):
-                np.random.seed(seed * 100 + run * 10000 + j)
-
-                t, x_noisy = simulate(y0, T, dt)
-                noise_std = (noise_lf * rmse) / 100.0
-                x_noisy += rng.normal(0.0, noise_std, size=x_noisy.shape)                
-
-                x_list_lf.append(x_noisy)
-                t_list_lf.append(t)
-
-            dataset[key] = dict(
-                hf=(x_list_hf, t_list_hf, ic_hf),
-                lf=(x_list_lf, t_list_lf, ic_lf),
-            )
-
-    if save_data:
-        np.savez(out_path, dataset=dataset)
-        print(f"\n Saved Lorenz dataset → {out_path}")
-
-        meta = dict(
-            n_runs=n_runs,
-            n_hf_list=n_hf_list,
-            n_lf_list=n_lf_list,
-            noise_hf_list=noise_hf_list,
-            noise_lf_list=noise_lf_list,
-            T=T,
-            dt=dt,
-            seed=seed,
+    for i in range(n_traj):
+        y0 = rng.uniform([-10, -10, 20], [10, 10, 30])
+        t, X, Xdot = generate_lorenz_trajectory(
+            y0=y0, T=T, dt=dt,
+            sigma=sigma, rho=rho, beta=beta,
+            noise_level=noise_level, seed=seed+i
         )
-        with open(Path(out_path).with_suffix(".json"), "w") as f:
-            json.dump(meta, f, indent=4)
-        print(f"Saved metadata → {Path(out_path).with_suffix('.json')}")
+        trajectories.append(X)
+        derivatives.append(Xdot)
+        times.append(t)
 
-    return dataset
+    return trajectories, derivatives, times
 
 
 # ---------------------------------------------------------------------
-# Main script
+# Visualization utilities
+# ---------------------------------------------------------------------
+def plot_lorenz_3d(X, title="Lorenz Attractor", ax=None):
+    """3D trajectory plot."""
+    from mpl_toolkits.mplot3d import Axes3D
+    if ax is None:
+        fig = plt.figure(figsize=(6, 5))
+        ax = fig.add_subplot(111, projection="3d")
+    ax.plot(X[:, 0], X[:, 1], X[:, 2], lw=1)
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("z")
+    ax.set_title(title)
+    plt.show()
+
+
+def animate_lorenz(X, t, save_path="lorenz.gif"):
+    """Animate Lorenz trajectory in 3D."""
+    from mpl_toolkits.mplot3d import Axes3D
+    from matplotlib.animation import FuncAnimation
+
+    fig = plt.figure(figsize=(6, 5))
+    ax = fig.add_subplot(111, projection="3d")
+    line, = ax.plot([], [], [], lw=1.5)
+
+    ax.set_xlim(np.min(X[:, 0]), np.max(X[:, 0]))
+    ax.set_ylim(np.min(X[:, 1]), np.max(X[:, 1]))
+    ax.set_zlim(np.min(X[:, 2]), np.max(X[:, 2]))
+    ax.set_title("Lorenz trajectory")
+
+    def update(frame):
+        line.set_data(X[:frame, 0], X[:frame, 1])
+        line.set_3d_properties(X[:frame, 2])
+        return line,
+
+    anim = FuncAnimation(fig, update, frames=len(t), interval=30, blit=True)
+    anim.save(save_path, writer="pillow", fps=30)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------
+# Example run
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
-    """
-    Main entry point for Lorenz dataset generation.
-    Configures the parameter sweep and saves results.
-    """
-    # ---------------- Configuration ----------------
-    output_dir = Path("./Data")
-    output_dir.mkdir(exist_ok=True)
-
-    config = dict(
-        n_hf_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        n_lf_list=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
-        noise_hf_list=[1.0, 5.0],
-        noise_lf_list=[10.0, 25.0, 50.0],
-        n_runs=5,
-        T=0.1,
-        dt=1e-3,
-        seed=42,
-        out_path=str(output_dir / "lorenz_dataset_trajectories_short.npz"),
+    trajectories, derivatives, times = generate_lorenz_flows(
+        n_traj=3, T=5.0, dt=1e-3, noise_level=0.05, seed=0
     )
 
-    print("\n=== Lorenz Dataset Generation ===")
-    print(json.dumps(config, indent=4))
-
-    # ---------------- Generate Dataset ----------------
-    dataset = generate_dataset(**config)
-
-    # ---------------- Save Metadata ----------------
-    metadata = {
-        "description": "Lorenz system trajectories for SINDy experiments",
-        "system": "Lorenz",
-        "parameters": config,
-    }
-
-    with open(output_dir / "metadata.json", "w") as f:
-        json.dump(metadata, f, indent=4)
-
-    print("\n✅ Dataset and metadata saved successfully.")
-    print(f"→ Dataset:   {output_dir / 'lorenz_dataset_all.npz'}")
-    print(f"→ Metadata:  {output_dir / 'metadata.json'}")
+    # Plot and animate first trajectory
+    plot_lorenz_3d(trajectories[0])
+    animate_lorenz(trajectories[0], times[0])

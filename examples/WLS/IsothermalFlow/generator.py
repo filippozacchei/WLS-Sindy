@@ -136,12 +136,10 @@ def generate_compressible_flow(
         )
 
         u_field = sol.y.reshape(N, N, 3, -1).transpose(0, 1, 3, 2)
-        u_dot = ps.FiniteDifference(d=1, axis=2)._differentiate(u_field, t)
 
         # Add measurement noise if desired
         if noise_level > 0.0:
-            u_field += noise_level * (0.5 - rng.random(size=u_field.shape))
-            u_dot = ps.FiniteDifference(d=1, axis=2)._differentiate(u_field, t)
+            u_field += noise_level * rng.standard_normal(size=u_field.shape)
 
         # Construct spatiotemporal grid
         grid = np.zeros((N, N, Nt, 3))
