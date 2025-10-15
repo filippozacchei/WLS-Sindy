@@ -1,3 +1,6 @@
+%=========================================================
+% main.tex — Elsevier article template
+%=========================================================
 \documentclass[final,3p,10.5pt]{elsarticle}
 \geometry{margin=1in}
 % Options: review, 1p, 3p, 5p, twocolumn, authoryear, number
@@ -14,10 +17,13 @@
 \usepackage{microtype}
 \usepackage{setspace}
 \usepackage{xcolor}
+\usepackage{natbib}
 
 %---------------------------------------------------------
 % BIBLIOGRAPHY STYLE
 %---------------------------------------------------------
+% Elsevier recommends using biblatex with biber or natbib
+\bibliographystyle{unsrt} % or elsarticle-num
 
 %---------------------------------------------------------
 % DOCUMENT INFORMATION
@@ -78,7 +84,7 @@ Learning analytics \sep Data science \sep Educational data mining \sep Predictiv
 %=========================================================
 \section{Results}
 
-\input{result.tex}
+ \nocite{*}
 
 %=========================================================
 % DISCUSSION
@@ -97,5 +103,6 @@ Provide a concise summary of the main outcomes and suggestions for future work.
 %=========================================================
 % REFERENCES
 %=========================================================
+\bibliography{references}
 
 \end{document}
