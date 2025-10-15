@@ -4,7 +4,7 @@ In this section, we generate and analyse trajectories from three canonical dynam
 
 \subsection{Lorenz System}
 
-The Lorenz system \cite{lorenz1963deterministic} is a three-dimensional autonomous system that exhibits chaotic behaviour for certain parameter regimes. It is defined as:
+The Lorenz system is a three-dimensional autonomous system that exhibits chaotic behaviour for certain parameter regimes. It is defined as:
 \begin{equation}
 \begin{aligned}
 \dot{x} &= \sigma (y - x), \\
@@ -17,7 +17,7 @@ where $\sigma$, $\rho$, and $\beta$ are the Prandtl, Rayleigh, and geometric par
 
 \subsection{Double Pendulum}
 
-The double pendulum is a well-known example of a nonlinear, chaotic mechanical system consisting of two point masses connected by rigid, massless rods. The dynamics are governed by the following coupled second-order equations:
+The double pendulum is a canonical example of a nonlinear, chaotic mechanical system consisting of two point masses connected by massless rigid rods. The equations of motion arise from the Lagrangian formulation and can be expressed as:
 \begin{equation}
 \begin{aligned}
 (m_1 + m_2) l_1 \ddot{\theta}_1 + m_2 l_2 \ddot{\theta}_2 \cos(\theta_1 - \theta_2)
@@ -29,20 +29,44 @@ m_2 l_2 \ddot{\theta}_2 + m_2 l_1 \ddot{\theta}_1 \cos(\theta_1 - \theta_2)
 \end{aligned}
 \label{eq:double_pendulum}
 \end{equation}
-where $\theta_1$ and $\theta_2$ are the angular displacements of the two pendulums, $l_1$ and $l_2$ are their lengths, $m_1$ and $m_2$ are their masses, and $g$ is the gravitational acceleration.
+where $\theta_1$ and $\theta_2$ are the angular displacements of the first and second pendula, $l_1$ and $l_2$ their lengths, $m_1$ and $m_2$ their masses, and $g$ is the gravitational acceleration.
 
-For numerical simulations, it is often convenient to express this as a first-order system by introducing angular velocities $\omega_i = \dot{\theta}_i$, such that $\dot{\theta}_i = \omega_i$ and $\dot{\omega}_i = f_i(\theta_1, \theta_2, \omega_1, \omega_2)$.
+For system identification, it is convenient to express the dynamics by defining angular velocities $\omega_i = \dot{\theta}_i$. The system can then be written as:
+\begin{equation}
+\begin{aligned}
+\dot{\theta}_1 &= \omega_1, \\
+\dot{\theta}_2 &= \omega_2, \\
+\dot{\omega}_1 &= \frac{
+    -g(2m_1 + m_2)\sin\theta_1 - m_2 g \sin(\theta_1 - 2\theta_2)
+    - 2 \sin(\theta_1 - \theta_2) m_2 \left(
+        \dot{\theta}_2^2 l_2 + \dot{\theta}_1^2 l_1 \cos(\theta_1 - \theta_2)
+    \right)
+}{
+    l_1 \left[ 2m_1 + m_2 - m_2 \cos(2\theta_1 - 2\theta_2) \right]
+}, \\
+\dot{\omega}_2 &= \frac{
+    2 \sin(\theta_1 - \theta_2)
+    \left[
+        \dot{\theta}_1^2 l_1 (m_1 + m_2)
+        + g (m_1 + m_2) \cos\theta_1
+        + \dot{\theta}_2^2 l_2 m_2 \cos(\theta_1 - \theta_2)
+    \right]
+}{
+    l_2 \left[ 2m_1 + m_2 - m_2 \cos(2\theta_1 - 2\theta_2) \right]
+}.
+\end{aligned}
+\label{eq:double_pendulum_first_order}
+\end{equation}
 
+This formulation highlights the system’s strong nonlinearity and coupling between angular positions and velocities, making it a standard benchmark for data-driven discovery of dynamics.
 \subsection{Compressible Flow: Isothermal Navier–Stokes}
 
 The one-dimensional isothermal compressible Navier–Stokes equations describe the evolution of a compressible fluid with constant temperature. They are expressed as:
 \begin{equation}
 \begin{aligned}
-\frac{\partial \rho}{\partial t} + \frac{\partial (\rho u)}{\partial x} &= 0, \\
-\frac{\partial (\rho u)}{\partial t} + \frac{\partial (\rho u^2 + c^2 \rho)}{\partial x} &= 
-\frac{\partial}{\partial x} \left( \mu \frac{\partial u}{\partial x} \right),
+\mathbf{u}_t&=-(\mathbf{u} \cdot \nabla) \mathbf{u}+\left(-\nabla P+\mu \nabla^2 \mathbf{u}\right) / \rho, 
+\\ \rho_t&=-\nabla \cdot(\rho \mathbf{u})
 \end{aligned}
-\label{eq:isothermal_ns}
 \end{equation}
 where $\rho(x,t)$ is the density field, $u(x,t)$ the velocity field, $c$ the isothermal speed of sound, and $\mu$ the dynamic viscosity. The first equation represents conservation of mass, and the second represents conservation of momentum.
 
