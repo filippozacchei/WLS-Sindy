@@ -1,14 +1,6 @@
 # Fdb version 4
-["bibtex main"] 1760486425.44727 "main.aux" "main.bbl" "main" 1760486591.54595 0
-  "./references.bib" 1760463888.03142 0 d41d8cd98f00b204e9800998ecf8427e ""
-  "/usr/local/texlive/2024/texmf-dist/bibtex/bst/base/unsrt.bst" 1292289607 18030 1376b4b231b50c66211e47e42eda2875 ""
-  "main.aux" 1760486591.23618 1842 47cc5f4796856827c71b0cd47c8fddb3 "pdflatex"
-  (generated)
-  "main.bbl"
-  "main.blg"
-  (rewritten before read)
-["pdflatex"] 1760486590.18618 "/Users/filippozacchei/Library/CloudStorage/OneDrive-PolitecnicodiMilano/Documenti/Projects/2025_visiting/Paper/main.tex" "main.pdf" "main" 1760486591.54608 0
-  "/Users/filippozacchei/Library/CloudStorage/OneDrive-PolitecnicodiMilano/Documenti/Projects/2025_visiting/Paper/main.tex" 1760486589.88499 3269 b1c473fbd3fa6cef3e57da12c610db12 ""
+["pdflatex"] 1760486719.69926 "/Users/filippozacchei/Library/CloudStorage/OneDrive-PolitecnicodiMilano/Documenti/Projects/2025_visiting/Paper/main.tex" "main.pdf" "main" 1760486720.92655 0
+  "/Users/filippozacchei/Library/CloudStorage/OneDrive-PolitecnicodiMilano/Documenti/Projects/2025_visiting/Paper/main.tex" 1760486718.32117 3119 2be2cb178e286ec3b3b26de9184d6a2d ""
   "/usr/local/texlive/2024/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2024/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
   "/usr/local/texlive/2024/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex8.tfm" 1246382020 988 bdf658c3bfc2d96d3c8b02cfc1c94c20 ""
@@ -124,11 +116,10 @@
   "/usr/local/texlive/2024/texmf-var/web2c/pdftex/pdflatex.fmt" 1736619761 8221421 b3d0d4a67dac63b7b08daf7e996803da ""
   "/usr/local/texlive/2024/texmf.cnf" 1710266656 577 e590dabc9e28c5b61546e15f63eebcdf ""
   "abstract.tex" 1760466889.92929 1649 24db795ea6049695cae9e150681674f7 ""
-  "main.aux" 1760486591.23618 1842 47cc5f4796856827c71b0cd47c8fddb3 "pdflatex"
-  "main.bbl" 1760486425.64322 49 0eba253fc001332e731e8aba3f23127b "bibtex main"
-  "main.out" 1760486591.23711 1236 7a79803f355bbd047e6ec3435f6ef639 "pdflatex"
-  "main.spl" 1760486590.48204 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
-  "main.tex" 1760486589.88499 3269 b1c473fbd3fa6cef3e57da12c610db12 ""
+  "main.aux" 1760486720.84202 1804 9b222f2443437c6f35596da64f28c4ec "pdflatex"
+  "main.out" 1760486720.8434 1236 7a79803f355bbd047e6ec3435f6ef639 "pdflatex"
+  "main.spl" 1760486719.99161 0 d41d8cd98f00b204e9800998ecf8427e "pdflatex"
+  "main.tex" 1760486718.32117 3119 2be2cb178e286ec3b3b26de9184d6a2d ""
   "result.tex" 1760486473.42039 3727 21c73fccb99de04595f74db37ed3bf44 ""
   (generated)
   "main.aux"
