@@ -58,7 +58,7 @@ def generate_test_data(dt=1e-3, t_end=10.0, n_traj=1, seed=999):
 # ---------------------------------------------------------------------
 # Model training & evaluation
 # ---------------------------------------------------------------------
-def run_sindy(X_list, t_list, dt, degree=2, threshold=0.1, library=None, weights=None):
+def run_sindy(X_list, t_list, dt, degree=2, threshold=0.5, library=None, weights=None):
     """
     Train a Weak SINDy model using the given library and optimizer.
     Returns the trained model and its optimizer.
@@ -123,7 +123,7 @@ def evaluate_dataset(dataset_path="./Data/lorenz_dataset_trajectories_short.npz"
     deg=degree
     t=t_test_list[0]
     print(t.shape)
-    K=10
+    K=100
 
     for key, entry in tqdm(dataset.items()):
         run, n_hf, n_lf, noise_hf, noise_lf = key
@@ -172,8 +172,11 @@ def evaluate_dataset(dataset_path="./Data/lorenz_dataset_trajectories_short.npz"
         opt_eval_mf.coef_ = opt_lf.coef_
 
         r2_hf = eval_model_hf.score(X_test_list, t=dt)
+        print(r2_hf)
         r2_lf = eval_model_lf.score(X_test_list, t=dt)
+        print(r2_lf)
         r2_mf = eval_model_mf.score(X_test_list, t=dt)
+        print(r2_mf)
 
         # --- Coefficient median absolute deviation ---
         C_hf = opt_hf.coef_.T
