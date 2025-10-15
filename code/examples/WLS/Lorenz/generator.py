@@ -38,21 +38,6 @@ def generate_lorenz_trajectory(
     """
     Generate one Lorenz trajectory (possibly noisy).
 
-    Parameters
-    ----------
-    y0 : array-like, shape (3,)
-        Initial condition. Random if None.
-    T : float
-        Total integration time.
-    dt : float
-        Time step.
-    sigma, rho, beta : float
-        Lorenz parameters.
-    noise_level : float
-        Standard deviation of additive Gaussian noise.
-    seed : int, optional
-        Random seed for reproducibility.
-
     Returns
     -------
     t : ndarray (Nt,)
@@ -96,21 +81,6 @@ def generate_lorenz_data(
 ):
     """
     Generate multiple Lorenz trajectories, analogous to generate_compressible_flow.
-
-    Parameters
-    ----------
-    n_traj : int
-        Number of trajectories.
-    T : float
-        Total simulation time.
-    dt : float
-        Time step.
-    noise_level : float
-        Gaussian noise level.
-    fidelity : str
-        'lf', 'hf', or 'mf'.
-    seed : int
-        RNG seed.
     """
     rng = np.random.default_rng(seed)
     trajectories, derivatives, times = [], [], []
@@ -126,7 +96,7 @@ def generate_lorenz_data(
         derivatives.append(Xdot)
         times.append(t)
 
-    return trajectories, derivatives, times
+    return trajectories, times[0], times
 
 
 # ---------------------------------------------------------------------

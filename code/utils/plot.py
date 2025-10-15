@@ -21,8 +21,6 @@ def plot_heatmap(
     cmap="magma",
     fname=None,
     label=r"$R^2$",
-    annotate=False,
-    fmt=".2f",
 ):
     """
     Produce a publication-quality heatmap.
