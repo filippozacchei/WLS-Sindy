@@ -111,14 +111,14 @@ def generate_compressible_flow(
     n_traj=1,
     N=64,
     Nt=200,
-    L=0.1,
+    L=5,
     T=2,
     mu=1.0,
     RT=1.0,
     noise_level=0.0,
     seed=42,
     initial_condition="taylor-green",
-    noise_0 = 0.01
+    noise_0 = 0.1
 ):
     """
     Generate one or more trajectories for the 2D isothermal
@@ -162,11 +162,25 @@ def generate_compressible_flow(
     ts = []
 
     for i in range(n_traj):
-        print(i)
         # Slightly randomize the initial condition
         U0, V0, RHO0 = make_initial_condition(X, Y, L, ic_type=initial_condition)
         noise_ic = noise_0 * rng.standard_normal((N, N, 3))
         y0 = np.stack([U0, V0, RHO0], axis=-1) + noise_ic
+        y0 = np.zeros((N, N, 3))
+        y0[:, :, 0] = (
+            -np.sin(2 * np.pi / L * x)[:, np.newaxis]
+            + 0.5 * np.cos(2 * 2 * np.pi / L * y)[np.newaxis, :]
+        )
+        y0[:, :, 1] = (
+            0.5 * np.cos(2 * np.pi / L * x)[:, np.newaxis]
+            - np.sin(2 * 2 * np.pi / L * y)[np.newaxis, :]
+        )
+        y0[:, :, 2] = (
+            1
+            + 0.5
+            * np.cos(2 * np.pi / L * x)[:, np.newaxis]
+            * np.cos(2 * 2 * np.pi / L * y)[np.newaxis, :]
+        )
 
         sol = solve_ivp(
             compressible,
@@ -196,143 +210,143 @@ def generate_compressible_flow(
 
     return trajectories, grid, ts
 
-# import matplotlib.pyplot as plt
-# from matplotlib.animation import FuncAnimation
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 
-# # ---------------------------------------------------------------------
-# # Visualization utilities
-# # ---------------------------------------------------------------------
-# def plot_snapshot(u_field, t, L, idx=None, title_prefix=""):
-#     """
-#     Plot u, v, rho fields for a given snapshot in time.
+# ---------------------------------------------------------------------
+# Visualization utilities
+# ---------------------------------------------------------------------
+def plot_snapshot(u_field, t, L, idx=None, title_prefix=""):
+    """
+    Plot u, v, rho fields for a given snapshot in time.
 
-#     Parameters
-#     ----------
-#     u_field : ndarray
-#         Flow field of shape (N, N, Nt, 3)
-#     t : ndarray
-#         Time array
-#     L : float
-#         Domain length
-#     idx : int, optional
-#         Time index to visualize (default: middle frame)
-#     title_prefix : str
-#         Prefix for subplot titles
-#     """
-#     N = u_field.shape[0]
-#     x = np.linspace(0, L, N, endpoint=False)
-#     y = np.linspace(0, L, N, endpoint=False)
-#     X, Y = np.meshgrid(x, y, indexing="ij")
+    Parameters
+    ----------
+    u_field : ndarray
+        Flow field of shape (N, N, Nt, 3)
+    t : ndarray
+        Time array
+    L : float
+        Domain length
+    idx : int, optional
+        Time index to visualize (default: middle frame)
+    title_prefix : str
+        Prefix for subplot titles
+    """
+    N = u_field.shape[0]
+    x = np.linspace(0, L, N, endpoint=False)
+    y = np.linspace(0, L, N, endpoint=False)
+    X, Y = np.meshgrid(x, y, indexing="ij")
 
-#     if idx is None:
-#         idx = u_field.shape[2] // 2
+    if idx is None:
+        idx = u_field.shape[2] // 2
 
-#     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-#     fields = [u_field[:, :, idx, 0], u_field[:, :, idx, 1], u_field[:, :, idx, 2]]
-#     labels = [r"$u(x,y)$", r"$v(x,y)$", r"$\rho(x,y)$"]
-#     cmaps = ["RdBu_r", "RdBu_r", "viridis"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fields = [u_field[:, :, idx, 0], u_field[:, :, idx, 1], u_field[:, :, idx, 2]]
+    labels = [r"$u(x,y)$", r"$v(x,y)$", r"$\rho(x,y)$"]
+    cmaps = ["RdBu_r", "RdBu_r", "viridis"]
 
-#     for ax, f, label, cmap in zip(axes, fields, labels, cmaps):
-#         im = ax.pcolormesh(X, Y, f, cmap=cmap, shading="auto")
-#         plt.colorbar(im, ax=ax, fraction=0.046)
-#         ax.set_title(f"{title_prefix}{label} @ t={t[idx]:.3f}")
-#         ax.set_xlabel("x")
-#         ax.set_ylabel("y")
+    for ax, f, label, cmap in zip(axes, fields, labels, cmaps):
+        im = ax.pcolormesh(X, Y, f, cmap=cmap, shading="auto")
+        plt.colorbar(im, ax=ax, fraction=0.046)
+        ax.set_title(f"{title_prefix}{label} @ t={t[idx]:.3f}")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
 
-#     plt.tight_layout()
-#     plt.show()
-
-
-# def animate_field(u_field, t, L, var_index=0, title=None, save_path=None):
-#     """
-#     Animate a given component (u, v, or rho) in time.
-
-#     Parameters
-#     ----------
-#     u_field : ndarray
-#         Flow field of shape (N, N, Nt, 3)
-#     t : ndarray
-#         Time array
-#     L : float
-#         Domain length
-#     var_index : int
-#         0 for u, 1 for v, 2 for rho
-#     title : str
-#         Figure title
-#     save_path : str or None
-#         If provided, saves animation to given file path
-#     """
-#     N = u_field.shape[0]
-#     x = np.linspace(0, L, N, endpoint=False)
-#     y = np.linspace(0, L, N, endpoint=False)
-#     X, Y = np.meshgrid(x, y, indexing="ij")
-
-#     var_name = ["u", "v", r"\rho"][var_index]
-#     field = u_field[:, :, :, var_index]
-
-#     fig, ax = plt.subplots(figsize=(6, 5))
-#     im = ax.pcolormesh(X, Y, field[:, :, 0], cmap="RdBu_r", shading="auto")
-#     cbar = plt.colorbar(im, ax=ax)
-#     cbar.set_label(var_name)
-#     ax.set_xlabel("x")
-#     ax.set_ylabel("y")
-#     ax.set_title(f"{title or 'Compressible Flow'} — {var_name} field")
-
-#     def update(frame):
-#         im.set_array(field[:, :, frame].ravel())
-#         ax.set_title(f"{title or 'Compressible Flow'} — {var_name} @ t={t[frame]:.3f}")
-#         return [im]
-
-#     anim = FuncAnimation(fig, update, frames=len(t), interval=80, blit=False)
-#     plt.tight_layout()
-
-#     if save_path:
-#         anim.save(save_path, dpi=200, fps=15)
-#         print(f"💾 Animation saved to {save_path}")
-#     else:
-#         plt.show()
-
-#     plt.close(fig)
+    plt.tight_layout()
+    plt.show()
 
 
-# def compare_trajectories(trajectories, t, L, component=0, idx=None):
-#     """
-#     Compare multiple trajectories for the same variable at a fixed time index.
+def animate_field(u_field, t, L, var_index=0, title=None, save_path=None):
+    """
+    Animate a given component (u, v, or rho) in time.
 
-#     Parameters
-#     ----------
-#     trajectories : list of ndarray
-#         Each element is u_field of shape (N, N, Nt, 3)
-#     t : ndarray
-#         Shared time array
-#     L : float
-#         Domain length
-#     component : int
-#         0 for u, 1 for v, 2 for rho
-#     idx : int or None
-#         Frame index to compare (default: mid-frame)
-#     """
-#     if idx is None:
-#         idx = trajectories[0].shape[2] // 2
+    Parameters
+    ----------
+    u_field : ndarray
+        Flow field of shape (N, N, Nt, 3)
+    t : ndarray
+        Time array
+    L : float
+        Domain length
+    var_index : int
+        0 for u, 1 for v, 2 for rho
+    title : str
+        Figure title
+    save_path : str or None
+        If provided, saves animation to given file path
+    """
+    N = u_field.shape[0]
+    x = np.linspace(0, L, N, endpoint=False)
+    y = np.linspace(0, L, N, endpoint=False)
+    X, Y = np.meshgrid(x, y, indexing="ij")
 
-#     n_traj = len(trajectories)
-#     fig, axes = plt.subplots(1, n_traj, figsize=(5 * n_traj, 4))
-#     if n_traj == 1:
-#         axes = [axes]
+    var_name = ["u", "v", r"\rho"][var_index]
+    field = u_field[:, :, :, var_index]
 
-#     var_name = ["u", "v", r"\rho"][component]
-#     for i, (u_field, ax) in enumerate(zip(trajectories, axes)):
-#         im = ax.imshow(
-#             u_field[:, :, idx, component],
-#             origin="lower",
-#             cmap="RdBu_r",
-#             extent=(0, L, 0, L),
-#         )
-#         ax.set_title(f"Trajectory {i+1} — {var_name} @ t={t[idx]:.3f}")
-#         ax.set_xlabel("x")
-#         ax.set_ylabel("y")
-#         plt.colorbar(im, ax=ax, fraction=0.046)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.pcolormesh(X, Y, field[:, :, 0], cmap="RdBu_r", shading="auto")
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label(var_name)
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_title(f"{title or 'Compressible Flow'} — {var_name} field")
 
-#     plt.tight_layout()
-#     plt.show()
+    def update(frame):
+        im.set_array(field[:, :, frame].ravel())
+        ax.set_title(f"{title or 'Compressible Flow'} — {var_name} @ t={t[frame]:.3f}")
+        return [im]
+
+    anim = FuncAnimation(fig, update, frames=len(t), interval=80, blit=False)
+    plt.tight_layout()
+
+    if save_path:
+        anim.save(save_path, dpi=200, fps=15)
+        print(f"💾 Animation saved to {save_path}")
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+
+def compare_trajectories(trajectories, t, L, component=0, idx=None):
+    """
+    Compare multiple trajectories for the same variable at a fixed time index.
+
+    Parameters
+    ----------
+    trajectories : list of ndarray
+        Each element is u_field of shape (N, N, Nt, 3)
+    t : ndarray
+        Shared time array
+    L : float
+        Domain length
+    component : int
+        0 for u, 1 for v, 2 for rho
+    idx : int or None
+        Frame index to compare (default: mid-frame)
+    """
+    if idx is None:
+        idx = trajectories[0].shape[2] // 2
+
+    n_traj = len(trajectories)
+    fig, axes = plt.subplots(1, n_traj, figsize=(5 * n_traj, 4))
+    if n_traj == 1:
+        axes = [axes]
+
+    var_name = ["u", "v", r"\rho"][component]
+    for i, (u_field, ax) in enumerate(zip(trajectories, axes)):
+        im = ax.imshow(
+            u_field[:, :, idx, component],
+            origin="lower",
+            cmap="RdBu_r",
+            extent=(0, L, 0, L),
+        )
+        ax.set_title(f"Trajectory {i+1} — {var_name} @ t={t[idx]:.3f}")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        plt.colorbar(im, ax=ax, fraction=0.046)
+
+    plt.tight_layout()
+    plt.show()

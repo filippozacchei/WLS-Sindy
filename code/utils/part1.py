@@ -69,6 +69,7 @@ def evaluate_mf_sindy(
     out_dir: str = "./Results",
     C_true=None,
     seed=1,
+    T_test=10
 ):
     """
     Generic multi-fidelity SINDy evaluation loop (compact version).
@@ -81,7 +82,7 @@ def evaluate_mf_sindy(
     score, mad, dis = _init_metrics(shape), _init_metrics(shape), _init_metrics(shape)
 
     # Prepare a clean test trajectory for evaluating R²
-    X_test, _, _ = generator(n_traj=5, noise_level=0.0, seed=999, T=10)
+    X_test, _, _ = generator(n_traj=5, noise_level=0.0, seed=999, T=T_test)
     std_per_dim = np.std(X_test[0])
 
     for i, n_lf in enumerate(tqdm(n_lf_vals, desc=f"{system_name}: LF grid")):
@@ -94,7 +95,7 @@ def evaluate_mf_sindy(
             }
 
             for run in range(runs):
-                X_hf, grid_hf, t_hf = generator(n_hf, noise_level=noise_level_hf * std_per_dim, T=T, seed=run*seed)
+                X_hf, grid_hf, t_hf = generator(n_traj=n_hf, noise_level=noise_level_hf * std_per_dim, T=T, seed=run*seed)
                 X_lf, _, t_lf = generator(n_lf, noise_level=noise_level_lf * std_per_dim, T=T, seed=run*seed + 100)
                 weights = [(1 / noise_level_hf) ** 2] * n_hf + [(1 / noise_level_lf) ** 2] * n_lf
 

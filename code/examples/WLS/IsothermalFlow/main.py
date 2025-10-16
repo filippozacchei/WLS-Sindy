@@ -5,6 +5,26 @@ from utils.part1 import evaluate_mf_sindy
 from generator import generate_compressible_flow
 import numpy as np
 
+# We need this signature
+# X_hf, grid_hf, t_hf = generator(n_hf, 
+#                                 noise_level=noise_level_hf * std_per_dim, 
+#                                 T=T, 
+#                                 seed=run*seed)
+# def generate_compressible_flow(
+#     n_traj=1,
+#     N=64,
+#     Nt=200,
+#     L=0.1,
+#     T=2,
+#     mu=1.0,
+#     RT=1.0,
+#     noise_level=0.0,
+#     seed=42,
+#     initial_condition="taylor-green",
+#     noise_0 = 0.01
+# )
+
+    
 if __name__ == "__main__":
     system_name = "lorenz"
     out_dir = "./Results"
@@ -40,7 +60,7 @@ if __name__ == "__main__":
         threshold=threshold,
         degree=degree,
         out_dir=out_dir,
-        C_true=C_true,
         seed=231,
-        T=0.1
+        T=0.1,
+        T_test=1
     )
