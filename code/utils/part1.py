@@ -1,9 +1,12 @@
-from metrics import *
-from training import * 
+from utils.metrics import *
+from utils.training import * 
 import numpy as np
 import pysindy as ps
 from tqdm import tqdm
 from pathlib import Path
+
+import warnings
+warnings.filterwarnings("ignore")
 
 def _init_metrics(shape):
     """Create metric containers for LF/HF/MF comparisons."""
@@ -19,10 +22,9 @@ def _train_models(X_lf, t_lf, X_hf, t_hf, grid, degree, threshold, K=100, weight
     library = ps.feature_library.WeakPDELibrary(
         ps.PolynomialLibrary(degree=degree, include_bias=False),
         spatiotemporal_grid=grid,
-        p=2, K=100,
+        p=2, K=K,
     )
 
-    # Train models
     model_hf, opt_hf = run_ensemble_sindy(X_hf, t_hf, threshold=threshold, library=library)
     model_lf, opt_lf = run_ensemble_sindy(X_lf, t_lf, threshold=threshold, library=library)
     X_mf, t_mf = X_hf + X_lf, t_hf + t_lf
@@ -35,7 +37,7 @@ def _evaluate_models(models, X_ref, dt, X_test, C_true=None):
     """Compute R², MAD, and disagreement for each model."""
     metrics = dict(r2={}, mad={}, dis={})
     for k, (model, opt) in models.items():
-        eval_model, _ = copy_sindy(model, [X_ref], dt)
+        eval_model, _ = copy_sindy(model, X_test, dt)
         metrics["r2"][k] = eval_model.score(X_test, t=dt)
         metrics["dis"][k] = np.median(ensemble_disagreement(opt))
         if C_true is not None:
@@ -56,12 +58,17 @@ def evaluate_mf_sindy(
     system_name: str,
     n_lf_vals,
     n_hf_vals,
-    runs: int = 5,
+    noise_level_hf=0.01,
+    noise_level_lf=0.1,
+    runs: int = 100,
+    K = 100,
+    T: float = 0.1,
     dt: float = 1e-3,
     threshold: float = 0.5,
     degree: int = 2,
     out_dir: str = "./Results",
     C_true=None,
+    seed=1,
 ):
     """
     Generic multi-fidelity SINDy evaluation loop (compact version).
@@ -74,7 +81,7 @@ def evaluate_mf_sindy(
     score, mad, dis = _init_metrics(shape), _init_metrics(shape), _init_metrics(shape)
 
     # Prepare a clean test trajectory for evaluating R²
-    X_test, _, _ = generator(n_traj=1, noise_level=0.0, seed=999)
+    X_test, _, _ = generator(n_traj=5, noise_level=0.0, seed=999, T=10)
     std_per_dim = np.std(X_test[0])
 
     for i, n_lf in enumerate(tqdm(n_lf_vals, desc=f"{system_name}: LF grid")):
@@ -87,11 +94,11 @@ def evaluate_mf_sindy(
             }
 
             for run in range(runs):
-                X_hf, grid_hf, t_hf = generator(n_hf, noise_level=0.025 * std_per_dim, T=0.1, seed=run)
-                X_lf, _, t_lf = generator(n_lf, noise_level=0.25 * std_per_dim, T=0.1, seed=run + 100)
-                weights = [(1 / 0.01) ** 2] * n_hf + [(1 / 0.1) ** 2] * n_lf
+                X_hf, grid_hf, t_hf = generator(n_hf, noise_level=noise_level_hf * std_per_dim, T=T, seed=run*seed)
+                X_lf, _, t_lf = generator(n_lf, noise_level=noise_level_lf * std_per_dim, T=T, seed=run*seed + 100)
+                weights = [(1 / noise_level_hf) ** 2] * n_hf + [(1 / noise_level_lf) ** 2] * n_lf
 
-                models = _train_models(X_lf, t_lf, X_hf, t_hf, grid_hf, dt, degree, threshold, weights)
+                models = _train_models(X_lf, t_lf, X_hf, t_hf, grid_hf, degree, threshold, K, weights)
                 metrics = _evaluate_models(models, X_hf[0], dt, X_test, C_true)
 
                 for metric_name in ("r2", "mad", "dis"):
