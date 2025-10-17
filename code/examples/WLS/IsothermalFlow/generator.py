@@ -166,21 +166,6 @@ def generate_compressible_flow(
         U0, V0, RHO0 = make_initial_condition(X, Y, L, ic_type=initial_condition)
         noise_ic = noise_0 * rng.standard_normal((N, N, 3))
         y0 = np.stack([U0, V0, RHO0], axis=-1) + noise_ic
-        y0 = np.zeros((N, N, 3))
-        y0[:, :, 0] = (
-            -np.sin(2 * np.pi / L * x)[:, np.newaxis]
-            + 0.5 * np.cos(2 * 2 * np.pi / L * y)[np.newaxis, :]
-        )
-        y0[:, :, 1] = (
-            0.5 * np.cos(2 * np.pi / L * x)[:, np.newaxis]
-            - np.sin(2 * 2 * np.pi / L * y)[np.newaxis, :]
-        )
-        y0[:, :, 2] = (
-            1
-            + 0.5
-            * np.cos(2 * np.pi / L * x)[:, np.newaxis]
-            * np.cos(2 * 2 * np.pi / L * y)[np.newaxis, :]
-        )
 
         sol = solve_ivp(
             compressible,

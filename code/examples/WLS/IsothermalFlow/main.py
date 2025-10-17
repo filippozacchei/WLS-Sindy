@@ -2,7 +2,7 @@ import sys
 sys.path.append("../../../")
 from pathlib import Path
 from utils.part1 import evaluate_mf_sindy
-from generator import generate_compressible_flow
+from generator import generate_compressible_flow, animate_field
 import numpy as np
 import pysindy as ps
 
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     n_lf_vals = np.arange(10, 101, 10)
     n_hf_vals = np.arange(1, 11, 1)
     runs = 1
-    dt = 1e-3
+    dt=0.0025
     threshold = 0.5
     degree = 2
 
@@ -55,6 +55,29 @@ if __name__ == "__main__":
         function_names=library_function_names
     )
                 
+    x0, grid, t0 = generate_compressible_flow()
+    
+    library = ps.feature_library.WeakPDELibrary(
+        custom_library,
+        derivative_order=2,
+        spatiotemporal_grid=grid,
+        p=2, 
+        K=2000
+    )
+    
+    optimizer = ps.EnsembleOptimizer(
+        ps.STLSQ(threshold=threshold),
+        bagging=True,
+        n_models=50,
+    )
+    
+    model = ps.SINDy(library=library, optimizer=optimizer)
+    
+    model.fit(x0,t0)
+    model.print()
+    
+    animate_field(x0, t0, L=5)
+    
     # Run the unified evaluation routine
     evaluate_mf_sindy(
         generator=generate_compressible_flow,
@@ -70,8 +93,9 @@ if __name__ == "__main__":
         out_dir=out_dir,
         seed=231,
         T=0.5,
-        T_test=1,
+        T_test=0.5,
         d_order=2,
         K=2000,
-        lib=custom_library
+        lib=custom_library,
+        verbose=True
     )
