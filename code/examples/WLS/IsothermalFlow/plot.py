@@ -5,13 +5,13 @@ import sys
 sys.path.append("../../../")
 from utils.plot import plot_heatmap
 
-system_name = "lorenz"
+system_name = "isothermal-flow"
 in_dir = "./Results"
 out_dir = "./Figures"
 
 # Define grid and parameters
-n_lf_vals = np.arange(10, 101, 10)
-n_hf_vals = np.arange(1, 11, 1)
+n_lf_vals = np.arange(10, 101, 50)
+n_hf_vals = np.arange(1, 11, 5)
 data = np.load(Path(in_dir) / system_name / f"{system_name}_results.npz")
 
 # Example plots
@@ -48,4 +48,4 @@ plot_heatmap(data["dlf_dis"], n_lf_vals, n_hf_vals,
 plot_heatmap(data["dhf_dis"], n_lf_vals, n_hf_vals,
                 fname=Path(out_dir) / "dis_mf_minus_hf.png", label="ΔDisagreement")
 
-print(f"\nLorenz evaluation complete. Results and figures saved to {out_dir}")
+print(f"\ISOthermal-flow evaluation complete. Results and figures saved to {out_dir}")

@@ -56,7 +56,7 @@ if __name__ == "__main__":
         function_names=library_function_names
     )
                 
-    x0, grid, t0 = generate_compressible_flow(T=0.5)
+    x0, grid, t0 = generate_compressible_flow(T=T)
     
     library = ps.feature_library.WeakPDELibrary(
         custom_library,
@@ -93,6 +93,6 @@ if __name__ == "__main__":
         T=0.1,
         T_test=0.5,
         d_order=2,
-        K=100,
+        K=2000,
         lib=custom_library,
     )
