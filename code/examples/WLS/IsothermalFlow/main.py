@@ -31,9 +31,9 @@ if __name__ == "__main__":
     out_dir = "./Results"
 
     # Define grid and parameters
-    n_lf_vals = np.arange(10, 101, 50)
-    n_hf_vals = np.arange(1, 11, 5)
-    runs = 1
+    n_lf_vals = np.arange(10, 101, 10)
+    n_hf_vals = np.arange(1, 11, 1)
+    runs = 10
     dt=0.001
     threshold = 0.5
     degree = 2
