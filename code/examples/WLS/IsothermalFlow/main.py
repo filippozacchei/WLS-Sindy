@@ -4,6 +4,7 @@ from pathlib import Path
 from utils.part1 import evaluate_mf_sindy
 from generator import generate_compressible_flow
 import numpy as np
+import pysindy as ps
 
 # We need this signature
 # X_hf, grid_hf, t_hf = generator(n_hf, 
@@ -37,16 +38,23 @@ if __name__ == "__main__":
     threshold = 0.5
     degree = 2
 
-    # Ground-truth Lorenz model coefficients (for MAD)
-    C_true = np.zeros((9, 3))
-    C_true[0, 0] = -10.0     # dx/dt = -10x + 10y
-    C_true[1, 0] = 10.0
-    C_true[0, 1] = 28.0      # dy/dt = 28x - xz - y
-    C_true[5, 1] = -1.0
-    C_true[1, 1] = -1.0
-    C_true[4, 2] = 1.0       # dz/dt = xy - (8/3)z
-    C_true[2, 2] = -8.0 / 3.0
 
+    # Simple library for now (polynomial)
+    library_functions = [
+        lambda x: x,
+        lambda x: 1 / (1e-6 + np.abs(x))
+    ]
+    library_function_names = [
+        lambda x: x,
+        lambda x: x + "^-1"
+    ]
+
+    # Create a custom feature library
+    custom_library = ps.CustomLibrary(
+        library_functions=library_functions,
+        function_names=library_function_names
+    )
+                
     # Run the unified evaluation routine
     evaluate_mf_sindy(
         generator=generate_compressible_flow,
@@ -61,6 +69,9 @@ if __name__ == "__main__":
         degree=degree,
         out_dir=out_dir,
         seed=231,
-        T=0.1,
-        T_test=1
+        T=0.5,
+        T_test=1,
+        d_order=2,
+        K=2000,
+        lib=custom_library
     )

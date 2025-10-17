@@ -16,11 +16,14 @@ def _init_metrics(shape):
         dlf=zeros(), dhf=zeros()
     )
 
-def _train_models(X_lf, t_lf, X_hf, t_hf, grid, degree, threshold, K=100, weights=None):
+def _train_models(X_lf, t_lf, X_hf, t_hf, grid, degree, threshold, K=100, d_order=0, lib=None, weights=None):
     """Train LF, HF, and MF ensemble SINDy models."""
+    if lib==None:
+        lib=ps.PolynomialLibrary(degree=degree, include_bias=False)
     # Build library once
     library = ps.feature_library.WeakPDELibrary(
-        ps.PolynomialLibrary(degree=degree, include_bias=False),
+        lib,
+        derivative_order=d_order,
         spatiotemporal_grid=grid,
         p=2, K=K,
     )
@@ -69,7 +72,9 @@ def evaluate_mf_sindy(
     out_dir: str = "./Results",
     C_true=None,
     seed=1,
-    T_test=10
+    T_test=10,
+    lib=None,
+    d_order=0,
 ):
     """
     Generic multi-fidelity SINDy evaluation loop (compact version).
@@ -84,6 +89,7 @@ def evaluate_mf_sindy(
     # Prepare a clean test trajectory for evaluating R²
     X_test, _, _ = generator(n_traj=5, noise_level=0.0, seed=999, T=T_test)
     std_per_dim = np.std(X_test[0])
+    print(std_per_dim)
 
     for i, n_lf in enumerate(tqdm(n_lf_vals, desc=f"{system_name}: LF grid")):
         for j, n_hf in enumerate(n_hf_vals):
@@ -99,12 +105,24 @@ def evaluate_mf_sindy(
                 X_lf, _, t_lf = generator(n_lf, noise_level=noise_level_lf * std_per_dim, T=T, seed=run*seed + 100)
                 weights = [(1 / noise_level_hf) ** 2] * n_hf + [(1 / noise_level_lf) ** 2] * n_lf
 
-                models = _train_models(X_lf, t_lf, X_hf, t_hf, grid_hf, degree, threshold, K, weights)
+                models = _train_models(X_lf, 
+                                       t_lf, 
+                                       X_hf,
+                                       t_hf, 
+                                       grid_hf, 
+                                       degree, 
+                                       threshold, 
+                                       K=K, 
+                                       d_order=d_order,
+                                       lib=lib, 
+                                       weights=weights)
                 metrics = _evaluate_models(models, X_hf[0], dt, X_test, C_true)
 
                 for metric_name in ("r2", "mad", "dis"):
                     for fidelity in metrics[metric_name]:
                         all_runs[metric_name][fidelity].append(metrics[metric_name][fidelity])
+                        if metric_name == "r2":
+                            print(fidelity, ": ", all_runs["r2"][fidelity][-1])
 
             agg_r2 = _aggregate_runs(all_runs["r2"], "r2")
             agg_mad = _aggregate_runs(all_runs["mad"], "mad")
