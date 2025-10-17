@@ -14,7 +14,7 @@ def run_ensemble_sindy(
     Train an Ensemble SINDy (Weak-SINDy) model.
     """
     optimizer = ps.EnsembleOptimizer(
-        ps.STLSQ(threshold=threshold),
+        ps.STLSQ(threshold=threshold, alpha=1e-12),
         bagging=True,
         n_models=n_models,
     )

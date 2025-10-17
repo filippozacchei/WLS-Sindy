@@ -110,7 +110,7 @@ def make_initial_condition(X, Y, L, ic_type="taylor-green", perturb_scale=0.0):
 def generate_compressible_flow(
     n_traj=1,
     N=64,
-    Nt=200,
+    Nt=100,
     L=5,
     T=2,
     mu=1.0,

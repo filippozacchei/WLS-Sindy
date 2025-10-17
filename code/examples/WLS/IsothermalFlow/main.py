@@ -27,17 +27,18 @@ import pysindy as ps
 
     
 if __name__ == "__main__":
-    system_name = "lorenz"
+    system_name = "isothermal-flow"
     out_dir = "./Results"
 
     # Define grid and parameters
-    n_lf_vals = np.arange(10, 101, 10)
-    n_hf_vals = np.arange(1, 11, 1)
+    n_lf_vals = np.arange(10, 101, 50)
+    n_hf_vals = np.arange(1, 11, 5)
     runs = 1
-    dt=0.0025
+    dt=0.001
     threshold = 0.5
     degree = 2
-
+    L=5
+    T=0.1
 
     # Simple library for now (polynomial)
     library_functions = [
@@ -55,28 +56,25 @@ if __name__ == "__main__":
         function_names=library_function_names
     )
                 
-    x0, grid, t0 = generate_compressible_flow()
+    x0, grid, t0 = generate_compressible_flow(T=0.5)
     
     library = ps.feature_library.WeakPDELibrary(
         custom_library,
         derivative_order=2,
         spatiotemporal_grid=grid,
         p=2, 
-        K=2000
+        K=2000,
+        H_xt = [L/10, L/10, T/10]
     )
     
-    optimizer = ps.EnsembleOptimizer(
-        ps.STLSQ(threshold=threshold),
-        bagging=True,
-        n_models=50,
-    )
+    optimizer = ps.STLSQ(threshold=threshold, alpha=1e-12,)
     
-    model = ps.SINDy(library=library, optimizer=optimizer)
+    model = ps.SINDy(feature_library=library, optimizer=optimizer)
     
-    model.fit(x0,t0)
+    model.fit(x=x0,t=t0)
     model.print()
-    
-    animate_field(x0, t0, L=5)
+    u_dot = ps.FiniteDifference(d=1, axis=2)._differentiate(x0[0], t0[0])
+    animate_field(u_dot, t0[0], L=5, save_path="./flow.gif")
     
     # Run the unified evaluation routine
     evaluate_mf_sindy(
@@ -92,10 +90,9 @@ if __name__ == "__main__":
         degree=degree,
         out_dir=out_dir,
         seed=231,
-        T=0.5,
+        T=0.1,
         T_test=0.5,
         d_order=2,
-        K=2000,
+        K=100,
         lib=custom_library,
-        verbose=True
     )

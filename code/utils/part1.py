@@ -16,7 +16,7 @@ def _init_metrics(shape):
         dlf=zeros(), dhf=zeros()
     )
 
-def _train_models(X_lf, t_lf, X_hf, t_hf, grid, degree, threshold, K=100, d_order=0, lib=None, weights=None, verbose=False):
+def _train_models(X_lf, t_lf, X_hf, t_hf, grid, degree, threshold, K=100, d_order=0, lib=None, weights=None):
     """Train LF, HF, and MF ensemble SINDy models."""
     if lib==None:
         lib=ps.PolynomialLibrary(degree=degree, include_bias=False)
@@ -32,13 +32,7 @@ def _train_models(X_lf, t_lf, X_hf, t_hf, grid, degree, threshold, K=100, d_orde
     model_lf, opt_lf = run_ensemble_sindy(X_lf, t_lf, threshold=threshold, library=library)
     X_mf, t_mf = X_hf + X_lf, t_hf + t_lf
     model_mf, opt_mf = run_ensemble_sindy(X_mf, t_mf, threshold=threshold, library=library, weights=weights)
-    if verbose:
-        print("model_hf: \n")
-        model_hf.print()
-        print("model_lf: \n")
-        model_lf.print()
-        print("model_mf: \n")
-        model_mf.print()
+
     return dict(hf=(model_hf, opt_hf), lf=(model_lf, opt_lf), mf=(model_mf, opt_mf))
 
 
@@ -81,7 +75,6 @@ def evaluate_mf_sindy(
     T_test=10,
     lib=None,
     d_order=0,
-    verbose=False,
 ):
     """
     Generic multi-fidelity SINDy evaluation loop (compact version).
@@ -122,16 +115,13 @@ def evaluate_mf_sindy(
                                        K=K, 
                                        d_order=d_order,
                                        lib=lib, 
-                                       weights=weights,
-                                       verbose=verbose)
+                                       weights=weights)
                 metrics = _evaluate_models(models, X_hf[0], dt, X_test, C_true)
 
                 for metric_name in ("r2", "mad", "dis"):
                     for fidelity in metrics[metric_name]:
                         all_runs[metric_name][fidelity].append(metrics[metric_name][fidelity])
-                        if metric_name == "r2":
-                            print(fidelity, ": ", all_runs["r2"][fidelity][-1])
-
+                        
             agg_r2 = _aggregate_runs(all_runs["r2"], "r2")
             agg_mad = _aggregate_runs(all_runs["mad"], "mad")
             agg_dis = _aggregate_runs(all_runs["dis"], "dis")
