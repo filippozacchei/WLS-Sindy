@@ -43,6 +43,7 @@ dev = [
   "pytest>=8.1",
   "ruff>=0.4.0",
   "mkdocs-jupyter>=0.24",
+  "seaborn"
 ]
 
 [tool.setuptools]
