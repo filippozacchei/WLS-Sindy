@@ -19,10 +19,8 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
-    coefficient_errors,
     fit_multi_trajectory_weak_gls_models,
     run_intra_trajectory_gls_experiment,
-    run_monte_carlo_experiment,
     run_multi_trajectory_gls_experiment,
 )
 from mfsindy.weighted_weak_pde_library import WeightedWeakPDELibrary
@@ -341,7 +339,6 @@ def run_hopf_multi_trajectory_gls_experiment(
 # ---------------------------------------------------------------------------
 
 @dataclass
-@dataclass
 class HopfIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     """Configuration for the heteroscedastic Hopf GLS experiment."""
 
@@ -363,8 +360,8 @@ class HopfIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # weak-library settings
     poly_degree: int = 3
     derivative_order: int = 1
-    H_xt: float = 0.5
-    K: int = 100
+    H_xt: float = 0.01
+    K: int = int(5 * (t1-t0) / H_xt)
     p: int = 2
     include_bias: bool = False
 

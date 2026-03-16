@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import seaborn as sns
 
-# Consistent colour scheme for Lorenz MF plots
 COLORS_MODELS = {
     "HF":   "tab:blue",
     "LF":   "tab:orange",
@@ -218,6 +217,15 @@ def plot_trajectories_additive_noise(x_true, alpha=0.05):
     fig = plt.figure(figsize=(5, 5), dpi=160)
     ax = fig.add_subplot(111, projection="3d")
 
+    ax.scatter(
+        x_noisy[:, 0],
+        x_noisy[:, 1],
+        x_noisy[:, 2],
+        s=0.1,
+        color=COLORS_MODELS["LF_2"],
+        alpha=0.4
+    )
+        
     ax.plot(
         x_true[:, 0],
         x_true[:, 1],
@@ -226,15 +234,36 @@ def plot_trajectories_additive_noise(x_true, alpha=0.05):
         color=COLORS_MODELS["HF_2"],
     )
 
+    ax.legend()
+    plt.show()
+    return x_noisy
+
+def plot_residuals(x_true, x_noisy):
+    x_clean = x_true[:, 0]
+    x_noisy = x_noisy[:, 0]
+
+    eps_x = np.abs(x_noisy - x_clean)
+
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 24,
+    })
+
+    steelred = "#b32425"   # same color style as theta residual plot
+
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=300)
+
     ax.plot(
-        x_noisy[:, 0],
-        x_noisy[:, 1],
-        x_noisy[:, 2],
-        ".",
-        color=COLORS_MODELS["LF_2"],
-        alpha=0.5
+        eps_x,
+        lw=0.9,
+        color=steelred,
     )
 
-    ax.legend()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.tick_params(axis="both", width=1.0, length=4)
+    ax.grid(False)
+
+    plt.tight_layout()
     plt.show()
     

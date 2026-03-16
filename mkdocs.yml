@@ -25,3 +25,20 @@ nav:
   - Methodology: methodology.md
 extra_css: []
 extra_javascript: []
+plugins:
+  - search
+  - mkdocs-jupyter:
+      execute: true
+      allow_errors: false
+      include_source: true
+nav:
+  - Overview: index.md
+  - Examples:
+      - Overview: examples.md
+      - Lorenz Part 1: notebooks/lorenz/part1.ipynb
+      - Lorenz Part 2: notebooks/lorenz/part2.ipynb
+      - Hopf Part 1: notebooks/hopf/part1.ipynb
+      - Hopf Part 2: notebooks/hopf/part2.ipynb
+  - API Reference: api.md
+  - Methodology: methodology.md
+
