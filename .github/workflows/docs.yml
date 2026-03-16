@@ -30,6 +30,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev]
       - name: Validate documentation structure
-        run: python docs/ci/check_docs.py
+        run: python scripts/check_docs.py
       - name: Build MkDocs site
         run: mkdocs build --strict
+        env:
+          MFSINDY_DOCS_BUILD: "1"

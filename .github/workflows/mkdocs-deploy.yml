@@ -27,6 +27,8 @@ jobs:
           pip install .[dev]
       - name: Build site
         run: mkdocs build --strict
+        env:
+          MFSINDY_DOCS_BUILD: "1"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

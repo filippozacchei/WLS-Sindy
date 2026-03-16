@@ -12,7 +12,7 @@ REQUIRED_HEADINGS = [
 
 
 def main() -> None:
-    index = Path(__file__).resolve().parent.parent / "index.md"
+    index = Path(__file__).resolve().parent.parent / "docs" / "index.md"
     text = index.read_text(encoding="utf8")
 
     missing = [heading for heading in REQUIRED_HEADINGS if heading not in text]
