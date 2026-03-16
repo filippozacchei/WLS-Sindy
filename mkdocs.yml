@@ -23,6 +23,8 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.inlinehilite
+  - pymdownx.arithmatex:
+      generic: true
 
 plugins:
   - search
@@ -43,4 +45,6 @@ nav:
   - Methodology: methodology.md
 
 extra_css: []
-extra_javascript: []
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

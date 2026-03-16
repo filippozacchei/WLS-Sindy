@@ -33,3 +33,5 @@ jobs:
         run: python scripts/check_docs.py
       - name: Build MkDocs site
         run: mkdocs build --strict
+        env:
+          MFSINDY_DOCS_BUILD: "1"

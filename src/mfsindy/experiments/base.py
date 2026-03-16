@@ -58,7 +58,8 @@ def run_monte_carlo_experiment(
     metric1_errors: Dict[str, List[float]] = {m: [] for m in methods}
     metric2_errors: Dict[str, List[float]] = {m: [] for m in methods}
 
-    for k in tqdm(range(n_runs), desc=progress_desc):
+    disable_progress = os.environ.get("MFSINDY_DOCS_BUILD") == "1"
+    for k in tqdm(range(n_runs), desc=progress_desc, disable=disable_progress):
         errors = single_run_fn(k)
         for m in methods:
             e1, e2 = errors[m]
