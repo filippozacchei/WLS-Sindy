@@ -32,130 +32,59 @@ def set_dark_theme(rc=None):
         base.update(rc)
     plt.rcParams.update(base)
 
+def plot_multifidelity_trajectories(X_hf, X_lf, X_ref, x, t):
+    traj_idx = 0
 
-def animate_trajectories_rotating(
-    X_true_traj,
-    hf_trajs,
-    lf_trajs,
-    n_frames=360,
-    elev=25,
-    azim_start=-60,
-    azim_step=1.0,
-    save_path=None,
-    dpi=200,
-):
-    """
-    Rotating 3D animation for Lorenz trajectories.
+    u_hf = X_hf[traj_idx][:, :, 0]   # (Nx, Nt)
+    u_lf = X_lf[traj_idx][:, :, 0]   # (Nx, Nt)
+    u_ref = X_ref[0][:, :, 0]              # (Nx, Nt)
 
-    - All trajectories (true, HF, LF) are fully drawn from the start.
-    - Only the camera angle changes over time.
-    """
-    from matplotlib.animation import FuncAnimation  # local import
+    x = np.squeeze(x)                 # (Nx,)
+    t = np.squeeze(t)                # (Nt,)
 
-    set_dark_theme()
+    Xg, Tg = np.meshgrid(x, t, indexing="ij")  # (Nx, Nt)
 
-    fig = plt.figure(figsize=(9.6, 5.4), dpi=dpi)
+    fig = plt.figure(figsize=(5, 3.5), dpi=150)
     ax = fig.add_subplot(111, projection="3d")
 
-    # True trajectory
-    line_true, = ax.plot(
-        X_true_traj[:, 0],
-        X_true_traj[:, 1],
-        X_true_traj[:, 2],
-        lw=0.9,
-        alpha=0.95,
-        color="white",
-        label="True",
+    ax.plot_surface(
+        Xg,
+        Tg,
+        u_lf,
+        color="tab:red",
+        alpha=0.25,
+        linewidth=0,
+        antialiased=True,
+        shade=False,
     )
 
-    # HF trajectories
-    hf_lines = []
-    for X in hf_trajs:
-        l, = ax.plot(
-            X[:, 0],
-            X[:, 1],
-            X[:, 2],
-            lw=1.0,
-            alpha=0.6,
-            color=COLORS_MODELS.get("HF", "tab:red"),
-        )
-        hf_lines.append(l)
+    ax.plot_surface(
+        Xg,
+        Tg,
+        u_hf,
+        color="tab:blue",
+        alpha=0.45,
+        linewidth=0,
+        antialiased=True,
+        shade=False,
+    )
 
-    # LF trajectories
-    lf_lines = []
-    for X in lf_trajs:
-        l, = ax.plot(
-            X[:, 0],
-            X[:, 1],
-            X[:, 2],
-            ".",
-            markersize=1.5,
-            alpha=0.4,
-            color=COLORS_MODELS.get("LF", "tab:blue"),
-        )
-        lf_lines.append(l)
+    k_ref = 0
+    ax.plot(
+        x,
+        np.full_like(x, t[k_ref]),
+        u_ref[:, k_ref],
+        color="black",
+        linewidth=1.0,
+    )
 
-    # Axis limits with approximate equal aspect
-    all_pts = np.vstack([X_true_traj] + hf_trajs + lf_trajs)
-    xyz_min = all_pts.min(axis=0)
-    xyz_max = all_pts.max(axis=0)
-    center = 0.5 * (xyz_min + xyz_max)
-    radius = 0.5 * np.max(xyz_max - xyz_min)
+    # Compact panel: no ticks, no axes, no titles
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
 
-    ax.set_xlim(center[0] - radius, center[0] + radius)
-    ax.set_ylim(center[1] - radius, center[1] + radius)
-    ax.set_zlim(center[2] - radius, center[2] + radius)
-
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-
-    ax.xaxis.pane.set_visible(False)
-    ax.yaxis.pane.set_visible(False)
-    ax.zaxis.pane.set_visible(False)
+    ax.set_axis_off()
     ax.grid(False)
 
-    legend_handles = [
-        Line2D([0], [0], color="white", lw=2, label="True"),
-        Line2D([0], [0], color=COLORS_MODELS.get("HF", "tab:red"),
-               lw=1.5, label="HF"),
-        Line2D(
-            [0],
-            [0],
-            color=COLORS_MODELS.get("LF", "tab:blue"),
-            marker=".",
-            linestyle="None",
-            markersize=6,
-            label="LF",
-        ),
-    ]
-    ax.legend(
-        handles=legend_handles,
-        loc="upper left",
-        frameon=False,
-        labelcolor="white",
-    )
-
-    def init():
-        ax.view_init(elev=elev, azim=azim_start)
-        return (line_true, *hf_lines, *lf_lines)
-
-    def update(frame):
-        azim = azim_start + frame * azim_step
-        ax.view_init(elev=elev, azim=azim)
-        return (line_true, *hf_lines, *lf_lines)
-
-    anim = FuncAnimation(
-        fig,
-        update,
-        init_func=init,
-        frames=n_frames,
-        interval=40,
-        blit=False,
-    )
-
-    if save_path is not None:
-        anim.save(save_path, writer="ffmpeg", dpi=dpi)
-
+    plt.tight_layout(pad=0.05)
     plt.show()
-    return anim

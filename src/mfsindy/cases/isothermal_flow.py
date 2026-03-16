@@ -319,7 +319,6 @@ def compute_reference_coefficients(
     model_ref = ps.SINDy(feature_library=weak_lib_ref, optimizer=opt_ref)
 
     model_ref.fit(U_clean, t=t)
-    model_ref.print()
 
     C_true = model_ref.optimizer.coef_.copy()  # shape (n_states=3, n_terms)
     return C_true, U_clean, t, grid, base_library
@@ -486,7 +485,6 @@ def _fit_stacked_weak_system(
     optimizer_factory,
 ) -> np.ndarray:
     optimizer = optimizer_factory()
-    print(optimizer)
     theta = np.vstack(theta_blocks)
     rhs = np.vstack(rhs_blocks)
     optimizer.fit(theta, rhs)
@@ -513,9 +511,7 @@ def _ns_fit_multi_trajectory_weak_gls_models(
     weak_seed = int(batch.metadata["weak_seed"])
     grid_shape = tuple(grid.shape[:-1])
     hf_variance = np.full(grid_shape, noise_hf_abs**2, dtype=float)
-    print(noise_hf_abs)
     lf_variance = np.full(grid_shape, noise_lf_abs**2, dtype=float)
-    print(noise_lf_abs)
     def build_group(
         trajectories: list[np.ndarray],
         *,
