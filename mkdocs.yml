@@ -37,10 +37,18 @@ nav:
   - Overview: index.md
   - Examples:
       - Overview: examples.md
+      - Base Part 1: notebooks/base/part1.ipynb
+      - Base Part 2: notebooks/base/part2.ipynb
+      - Burgers Part 1: notebooks/burgers/part1.ipynb
+      - Burgers Part 2: notebooks/burgers/part2.ipynb
       - Lorenz Part 1: notebooks/lorenz/part1.ipynb
       - Lorenz Part 2: notebooks/lorenz/part2.ipynb
       - Hopf Part 1: notebooks/hopf/part1.ipynb
       - Hopf Part 2: notebooks/hopf/part2.ipynb
+      - Isothermal Flow Part 1: notebooks/isothermal_flow/part1.ipynb
+      - Isothermal Flow Part 2: notebooks/isothermal_flow/part2.ipynb
+      - Pendulum Part 1: notebooks/pendulum/part1.ipynb
+      - Pendulum Part 2: notebooks/pendulum/part2.ipynb
   - API Reference: api.md
   - Methodology: methodology.md
 
