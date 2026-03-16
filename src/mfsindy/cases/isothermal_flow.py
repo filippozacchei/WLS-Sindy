@@ -698,7 +698,7 @@ def _build_ns_gls_artifacts(
 
     variance_scaled = variance / np.mean(variance)
     tf_seed = cfg.seed_base + 1000 + run_idx
-    h_xt = [cfg.L / 10.0, cfg.L / 10.0, cfg.T / 10.0]
+    h_xt = [cfg.L / 20.0, cfg.L / 20.0, cfg.T / 20.0]
 
     np.random.seed(tf_seed)
     weak_lib = WeakPDELibrary(
