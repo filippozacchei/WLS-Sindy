@@ -14,6 +14,8 @@ COLORS_MODELS = {
     "LF":   "tab:orange",
     "MF":   "tab:green",
     "MF_w": "tab:red",
+    "HF_2": "black",
+    "LF_2": "tab:blue",
 }
 
 
@@ -171,4 +173,68 @@ def animate_trajectories_rotating(
     plt.show()
     return anim
 
+def plot_multifidelity_trajectories(X_hf, X_lf, X_clean):
+    fig = plt.figure(figsize=(5, 5), dpi=160)
+    ax = fig.add_subplot(111, projection="3d")
 
+    for traj in X_lf[: min(15, len(X_lf))]:
+        ax.plot(
+            traj[:, 0],
+            traj[:, 1],
+            traj[:, 2],
+            ".",
+            alpha=0.15,
+            color=COLORS_MODELS["LF"],
+            markersize=1.4,
+        )
+    for traj in X_hf[: min(5, len(X_hf))]:
+        ax.plot(
+            traj[:, 0],
+            traj[:, 1],
+            traj[:, 2],
+            ".",
+            alpha=0.6,
+            color=COLORS_MODELS["HF"],
+            markersize=1.8,
+        )
+    ax.plot(
+        X_clean[0][:, 0],
+        X_clean[0][:, 1],
+        X_clean[0][:, 2],
+        color="black",
+        linewidth=0.4,
+        alpha=0.5,
+    )
+    ax.grid(False)
+    plt.show()
+
+def plot_trajectories_additive_noise(x_true, alpha=0.05):
+    
+    state_norm = np.linalg.norm(x_true, axis=1, keepdims=True)   # shape (T, 1)
+    noise = alpha * state_norm * np.random.randn(*x_true.shape)
+
+    x_noisy = x_true + noise
+
+    fig = plt.figure(figsize=(5, 5), dpi=160)
+    ax = fig.add_subplot(111, projection="3d")
+
+    ax.plot(
+        x_true[:, 0],
+        x_true[:, 1],
+        x_true[:, 2],
+        "-",
+        color=COLORS_MODELS["HF_2"],
+    )
+
+    ax.plot(
+        x_noisy[:, 0],
+        x_noisy[:, 1],
+        x_noisy[:, 2],
+        ".",
+        color=COLORS_MODELS["LF_2"],
+        alpha=0.5
+    )
+
+    ax.legend()
+    plt.show()
+    
