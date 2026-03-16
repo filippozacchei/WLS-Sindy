@@ -19,3 +19,16 @@ Each notebook follows the same storyline:
 3. Visualise coefficient MAE/support errors with `mfsindy.plots.bubble_hist`.
 
 > **Tip:** keep large outputs under `examples/<case>/results/`; those folders are git-ignored so repeated runs stay clean.
+
+## Run In Binder
+
+Use the links below to launch the notebooks in a live Binder session.
+
+| Case | Part 1 | Part 2 |
+| --- | --- | --- |
+| Base diffusion tutorial | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/base/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/base/part2.ipynb) |
+| Lorenz | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/lorenz/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/lorenz/part2.ipynb) |
+| Burgers | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/burgers/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/burgers/part2.ipynb) |
+| Hopf | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/hopf/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/hopf/part2.ipynb) |
+| Pendulum | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/pendulum/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/pendulum/part2.ipynb) |
+| Isothermal flow | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/isothermal_flow/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/isothermal_flow/part2.ipynb) |
