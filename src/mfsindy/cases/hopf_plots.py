@@ -5,15 +5,14 @@ Plotting utilities for Burgers and Lorenz experiments.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import seaborn as sns
 
-# Consistent colour scheme for Lorenz MF plots
 COLORS_MODELS = {
     "HF":   "tab:blue",
     "LF":   "tab:orange",
     "MF":   "tab:green",
     "MF_w": "tab:red",
+    "HF_2": "black",
+    "LF_2": "tab:blue",
 }
 
 def set_dark_theme(rc=None):
@@ -32,130 +31,114 @@ def set_dark_theme(rc=None):
     plt.rcParams.update(base)
 
 
-def animate_trajectories_rotating(
-    X_true_traj,
-    hf_trajs,
-    lf_trajs,
-    n_frames=360,
-    elev=25,
-    azim_start=-60,
-    azim_step=1.0,
-    save_path=None,
-    dpi=200,
-):
-    """
-    Rotating 3D animation for Lorenz trajectories.
+def plot_multifidelity_trajectories(X_hf, X_lf, X_clean):
 
-    - All trajectories (true, HF, LF) are fully drawn from the start.
-    - Only the camera angle changes over time.
-    """
-    from matplotlib.animation import FuncAnimation  # local import
+    fig, ax = plt.subplots(figsize=(5, 5), dpi=150)
 
-    set_dark_theme()
+    # LF trajectories (noisy) – red
+    for X in X_lf:
+        ax.plot(
+            X[::10, 0],
+            X[::10, 1],
+            ".",
+            color="tab:red",
+            alpha=0.1,
+            linewidth=0.6,
+        )
 
-    fig = plt.figure(figsize=(9.6, 5.4), dpi=dpi)
-    ax = fig.add_subplot(111, projection="3d")
+    # HF trajectories (noisy) – blue
+    for X in X_hf:
+        ax.plot(
+            X[::10, 0],
+            X[::10, 1],
+            ".",
+            color="tab:blue",
+            alpha=0.2,
+            linewidth=0.8,
+        )
 
-    # True trajectory
-    line_true, = ax.plot(
-        X_true_traj[:, 0],
-        X_true_traj[:, 1],
-        X_true_traj[:, 2],
-        lw=0.9,
-        alpha=0.95,
-        color="white",
-        label="True",
+    # Clean reference trajectory – black
+    ax.plot(
+        X_clean[0][:, 0],
+        X_clean[0][:, 1],
+        "-",
+        color="black",
+        alpha=1.0,
+        linewidth=1.0,
     )
 
-    # HF trajectories
-    hf_lines = []
-    for X in hf_trajs:
-        l, = ax.plot(
-            X[:, 0],
-            X[:, 1],
-            X[:, 2],
-            lw=1.0,
-            alpha=0.6,
-            color=COLORS_MODELS.get("HF", "tab:red"),
-        )
-        hf_lines.append(l)
+    # Remove ticks and spines for a clean, compact panel
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
 
-    # LF trajectories
-    lf_lines = []
-    for X in lf_trajs:
-        l, = ax.plot(
-            X[:, 0],
-            X[:, 1],
-            X[:, 2],
-            ".",
-            markersize=1.5,
-            alpha=0.4,
-            color=COLORS_MODELS.get("LF", "tab:blue"),
-        )
-        lf_lines.append(l)
-
-    # Axis limits with approximate equal aspect
-    all_pts = np.vstack([X_true_traj] + hf_trajs + lf_trajs)
-    xyz_min = all_pts.min(axis=0)
-    xyz_max = all_pts.max(axis=0)
-    center = 0.5 * (xyz_min + xyz_max)
-    radius = 0.5 * np.max(xyz_max - xyz_min)
-
-    ax.set_xlim(center[0] - radius, center[0] + radius)
-    ax.set_ylim(center[1] - radius, center[1] + radius)
-    ax.set_zlim(center[2] - radius, center[2] + radius)
-
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-
-    ax.xaxis.pane.set_visible(False)
-    ax.yaxis.pane.set_visible(False)
-    ax.zaxis.pane.set_visible(False)
     ax.grid(False)
 
-    legend_handles = [
-        Line2D([0], [0], color="white", lw=2, label="True"),
-        Line2D([0], [0], color=COLORS_MODELS.get("HF", "tab:red"),
-               lw=1.5, label="HF"),
-        Line2D(
-            [0],
-            [0],
-            color=COLORS_MODELS.get("LF", "tab:blue"),
-            marker=".",
-            linestyle="None",
-            markersize=6,
-            label="LF",
-        ),
-    ]
-    ax.legend(
-        handles=legend_handles,
-        loc="upper left",
-        frameon=False,
-        labelcolor="white",
-    )
-
-    def init():
-        ax.view_init(elev=elev, azim=azim_start)
-        return (line_true, *hf_lines, *lf_lines)
-
-    def update(frame):
-        azim = azim_start + frame * azim_step
-        ax.view_init(elev=elev, azim=azim)
-        return (line_true, *hf_lines, *lf_lines)
-
-    anim = FuncAnimation(
-        fig,
-        update,
-        init_func=init,
-        frames=n_frames,
-        interval=40,
-        blit=False,
-    )
-
-    if save_path is not None:
-        anim.save(save_path, writer="ffmpeg", dpi=dpi)
-
+    plt.tight_layout(pad=0.05)
     plt.show()
-    return anim
 
+
+
+def plot_trajectories_additive_noise(x_true, alpha=0.05, mu = 1.0):
+    
+    sigma0 = 1e-2
+    alpha = 0.15
+
+    state_norm = np.linalg.norm(x_true, axis=1, keepdims=True)   # shape (T, 1)
+    noise = (alpha * np.abs(state_norm-mu) + sigma0) * np.random.randn(*x_true.shape)
+
+    x_noisy = x_true + noise
+
+    fig, ax = plt.subplots(figsize=(5, 5), dpi=150)
+
+    ax.plot(x_true[:, 0], x_true[:, 1], "-",
+        color=COLORS_MODELS["HF_2"],)
+
+    ax.scatter(x_noisy[:, 0], x_noisy[:, 1],
+            s=3, color=COLORS_MODELS["LF_2"], 
+            alpha=0.4, label="noisy")
+
+
+    # Limit cycle r = 1
+    theta = np.linspace(0, 2*np.pi, 400)
+    ax.plot(np.cos(theta), np.sin(theta),
+            "--", color="gray", linewidth=1.0, alpha=0.8, label="limit cycle")
+
+    ax.set_aspect("equal", "box")
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xlabel(""); ax.set_ylabel("")
+    ax.set_frame_on(False)
+
+    plt.tight_layout()
+    plt.show()
+    return x_noisy
+
+def plot_residuals(x_true, x_noisy):
+    x_clean = x_true[:, 0]
+    x_noisy = x_noisy[:, 0]
+
+    eps_x = np.abs(x_noisy - x_clean)
+
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 24,
+    })
+
+    steelred = "#b32425"   # same color style as theta residual plot
+
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=300)
+
+    ax.plot(
+        eps_x,
+        lw=0.9,
+        color=steelred,
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.tick_params(axis="both", width=1.0, length=4)
+    ax.grid(False)
+
+    plt.tight_layout()
+    plt.show()
