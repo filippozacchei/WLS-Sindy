@@ -27,6 +27,12 @@ plugins:
       execute: true
       allow_errors: false
       include_source: true
+      ignore_h1_titles: false
+      include:
+        - "*.ipynb"
+      exclude:
+        - "notebooks/forecastingDoublePendulum.ipynb"
+        - "notebooks/forecastingMF.ipynb"
 
 nav:
   - Overview: index.md
