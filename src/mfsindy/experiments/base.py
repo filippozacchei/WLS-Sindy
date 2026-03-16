@@ -106,12 +106,17 @@ class EnsembleConfigMixin:
     def ensemble_kwargs(self) -> Dict[str, Any]:
         return {"bagging": True}
 
-    def make_optimizer(self) -> ps.EnsembleOptimizer:
+    def make_optimizer(self):
         base_opt = ps.STLSQ(self.stlsq_threshold, **self.stlsq_kwargs())
+        ensemble_kwargs = self.ensemble_kwargs()
+        if not ensemble_kwargs.get("bagging", False) and not ensemble_kwargs.get(
+            "library_ensemble", False
+        ):
+            return base_opt
         return ps.EnsembleOptimizer(
             base_opt,
             n_models=self.n_ensemble_models,
-            **self.ensemble_kwargs(),
+            **ensemble_kwargs,
         )
 
 

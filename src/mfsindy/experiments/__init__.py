@@ -14,6 +14,7 @@ from .intra_trajectory import (
 from .multi_trajectory import (
     MultiTrajectoryGLSData,
     fit_multi_trajectory_gls_models,
+    fit_multi_trajectory_weak_gls_models,
     run_multi_trajectory_gls_experiment,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     "EnsembleConfigMixin",
     "MultiTrajectoryGLSData",
     "fit_multi_trajectory_gls_models",
+    "fit_multi_trajectory_weak_gls_models",
     "run_multi_trajectory_gls_experiment",
     "IntraTrajectoryGLSData",
     "fit_intra_trajectory_gls_models",
