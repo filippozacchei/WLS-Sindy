@@ -408,8 +408,6 @@ def _ns_dataset_batch(
 
     hf_data = _sample(cfg.n_hf, noise_hf_abs, offset=0)
     lf_data = _sample(cfg.n_lf, noise_lf_abs, offset=10_000)
-    
-    print("FIT")
 
     return MultiTrajectoryGLSData(
         hf=hf_data,
@@ -417,22 +415,141 @@ def _ns_dataset_batch(
         t_argument=t,
         metadata={
             "grid": grid,
+            "weak_seed": cfg.seed_base + 100_000 + run_idx,
         },
     )
 
 
 def _ns_library(batch: MultiTrajectoryGLSData, cfg: NSIsothermalMultiTrajectoryGLSConfig):
-    return WeightedWeakPDELibrary(
+    return WeakPDELibrary(
         function_library=_build_custom_library(),
         derivative_order=cfg.derivative_order,
         spatiotemporal_grid=batch.metadata["grid"],
-        spatiotemporal_weights=np.ones((cfg.N,cfg.N,cfg.Nt)),
         is_uniform=True,
         K=cfg.K,
         p=cfg.p,
         H_xt=[cfg.L / 10.0, cfg.L / 10.0, cfg.T / 10.0],
         include_bias=cfg.include_bias,
     )
+
+
+def _ns_make_weak_library(
+    cfg: NSIsothermalMultiTrajectoryGLSConfig,
+    grid: np.ndarray,
+    *,
+    variance_field: np.ndarray | None,
+    weak_seed: int,
+):
+    np.random.seed(weak_seed)
+    common_kwargs = dict(
+        function_library=_build_custom_library(),
+        derivative_order=cfg.derivative_order,
+        spatiotemporal_grid=grid,
+        is_uniform=True,
+        K=cfg.K,
+        p=cfg.p,
+        H_xt=[cfg.L / 10.0, cfg.L / 10.0, cfg.T / 10.0],
+        include_bias=cfg.include_bias,
+    )
+    if variance_field is None:
+        return WeightedWeakPDELibrary(
+            spatiotemporal_weights=np.ones((cfg.N,cfg.N,cfg.Nt)),
+            **common_kwargs)
+    return WeightedWeakPDELibrary(
+        spatiotemporal_weights=variance_field,
+        **common_kwargs,
+    )
+
+
+def _ns_build_weak_block(
+    traj: np.ndarray,
+    cfg: NSIsothermalMultiTrajectoryGLSConfig,
+    *,
+    grid: np.ndarray,
+    variance_field: np.ndarray | None,
+    weak_seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    library = _ns_make_weak_library(
+        cfg,
+        grid,
+        variance_field=variance_field,
+        weak_seed=weak_seed,
+    )
+    theta = np.asarray(library.fit_transform([traj])[0])
+    rhs = np.asarray(library.convert_u_dot_integral(traj))
+    return theta, rhs
+
+
+def _fit_stacked_weak_system(
+    theta_blocks: list[np.ndarray],
+    rhs_blocks: list[np.ndarray],
+    optimizer_factory,
+) -> np.ndarray:
+    optimizer = optimizer_factory()
+    print(optimizer)
+    theta = np.vstack(theta_blocks)
+    rhs = np.vstack(rhs_blocks)
+    optimizer.fit(theta, rhs)
+    coef_list = getattr(optimizer, "coef_list", None)
+    if coef_list:
+        arr = np.asarray(coef_list)
+        if arr.ndim == 3:
+            return np.median(arr, axis=0)
+    return np.asarray(optimizer.coef_)
+
+
+def _ns_fit_multi_trajectory_weak_gls_models(
+    batch: MultiTrajectoryGLSData,
+    cfg: NSIsothermalMultiTrajectoryGLSConfig,
+    optimizer_factory,
+    *,
+    t_argument,
+    noise_hf_abs: float,
+    noise_lf_abs: float,
+) -> Dict[str, np.ndarray]:
+    del t_argument
+
+    grid = batch.metadata["grid"]
+    weak_seed = int(batch.metadata["weak_seed"])
+    grid_shape = tuple(grid.shape[:-1])
+    hf_variance = np.full(grid_shape, noise_hf_abs**2, dtype=float)
+    print(noise_hf_abs)
+    lf_variance = np.full(grid_shape, noise_lf_abs**2, dtype=float)
+    print(noise_lf_abs)
+    def build_group(
+        trajectories: list[np.ndarray],
+        *,
+        variance_field: np.ndarray | None,
+    ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        theta_blocks: list[np.ndarray] = []
+        rhs_blocks: list[np.ndarray] = []
+        for traj in trajectories:
+            theta, rhs = _ns_build_weak_block(
+                traj,
+                cfg,
+                grid=grid,
+                variance_field=variance_field,
+                weak_seed=weak_seed,
+            )
+            theta_blocks.append(theta)
+            rhs_blocks.append(rhs)
+        return theta_blocks, rhs_blocks
+
+    theta_hf, rhs_hf = build_group(batch.hf, variance_field=None)
+    theta_lf, rhs_lf = build_group(batch.lf, variance_field=None)
+    theta_hf_w, rhs_hf_w = build_group(batch.hf, variance_field=hf_variance)
+    theta_lf_w, rhs_lf_w = build_group(batch.lf, variance_field=lf_variance)
+
+    return {
+        "HF": _fit_stacked_weak_system(theta_hf, rhs_hf, optimizer_factory),
+        "LF": _fit_stacked_weak_system(theta_lf, rhs_lf, optimizer_factory),
+        "MF": _fit_stacked_weak_system(theta_hf + theta_lf, rhs_hf + rhs_lf, optimizer_factory),
+        "MF_w": _fit_stacked_weak_system(
+            theta_hf_w + theta_lf_w,
+            rhs_hf_w + rhs_lf_w,
+            optimizer_factory,
+        ),
+    }
 
 
 def run_ns_isothermal_multi_trajectory_gls_experiment(
@@ -487,8 +604,8 @@ def run_ns_isothermal_multi_trajectory_gls_experiment(
     )
 
 
-    state_std = float(np.std(U_ref))
-    print(state_std)
+    state_std = float(np.std(U_ref[:,:,:,2]))
+
     def _reference_state_std(_: NSIsothermalMultiTrajectoryGLSConfig) -> float:
         return state_std
 
@@ -501,7 +618,6 @@ def run_ns_isothermal_multi_trajectory_gls_experiment(
             grid=grid_ref,
             t=t_ref,
         )
-    print(C_true)
     return run_multi_trajectory_gls_experiment(
         cfg,
         reference_state_std=_reference_state_std,
@@ -509,6 +625,7 @@ def run_ns_isothermal_multi_trajectory_gls_experiment(
         library_builder=_ns_library,
         true_coefficients=lambda _batch, _cfg: C_true,
         optimizer_factory=cfg.make_optimizer,
+        fit_models_fn=_ns_fit_multi_trajectory_weak_gls_models,
         progress_desc="MC isothermal NS MF",
     )
 

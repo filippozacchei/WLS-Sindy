@@ -26,6 +26,7 @@ from mfsindy.experiments import (
     MonteCarloConfig,
     MultiTrajectoryGLSData,
     coefficient_errors,
+    fit_multi_trajectory_weak_gls_models,
     run_intra_trajectory_gls_experiment,
     run_monte_carlo_experiment,
     run_multi_trajectory_gls_experiment,
@@ -288,7 +289,7 @@ def _pendulum_batch(
         hf=X_hf,
         lf=X_lf,
         t_argument=cfg.dt,
-        metadata={"t_grid": t_train},
+        metadata={"t_grid": t_train, "weak_seed": cfg.seed_base + 10_000 + run_idx},
     )
 
 
@@ -305,6 +306,52 @@ def _pendulum_library(batch: MultiTrajectoryGLSData, cfg: PendulumMultiTrajector
 
 def _pendulum_true_coefficients(_: MultiTrajectoryGLSData, cfg: PendulumMultiTrajectoryGLSConfig) -> np.ndarray:
     return build_true_pendulum_coefficients(g=cfg.g, L=cfg.L, c=cfg.c)
+
+
+def _pendulum_make_weak_library(
+    batch: MultiTrajectoryGLSData,
+    cfg: PendulumMultiTrajectoryGLSConfig,
+    *,
+    variance_field: np.ndarray | None,
+):
+    np.random.seed(int(batch.metadata["weak_seed"]))
+    base_library = ps.PolynomialLibrary(
+        degree=cfg.poly_degree,
+        include_bias=False,
+    )
+    common_kwargs = dict(
+        function_library=base_library,
+        spatiotemporal_grid=batch.metadata["t_grid"],
+    )
+    if variance_field is None:
+        return WeakPDELibrary(**common_kwargs)
+    return WeightedWeakPDELibrary(spatiotemporal_weights=variance_field, **common_kwargs)
+
+
+def _pendulum_fit_multi_trajectory_weak_gls_models(
+    batch: MultiTrajectoryGLSData,
+    cfg: PendulumMultiTrajectoryGLSConfig,
+    optimizer_factory,
+    *,
+    t_argument,
+    noise_hf_abs: float,
+    noise_lf_abs: float,
+) -> Dict[str, np.ndarray]:
+    del t_argument
+
+    def weak_block_builder(traj: np.ndarray, variance_field: np.ndarray | None):
+        lib = _pendulum_make_weak_library(batch, cfg, variance_field=variance_field)
+        theta = np.asarray(lib.fit_transform([traj])[0])
+        rhs = np.asarray(lib.convert_u_dot_integral(traj))
+        return theta, rhs
+
+    return fit_multi_trajectory_weak_gls_models(
+        batch,
+        optimizer_factory,
+        weak_block_builder=weak_block_builder,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
 
 
 def run_pendulum_multi_trajectory_gls_experiment(
@@ -336,6 +383,7 @@ def run_pendulum_multi_trajectory_gls_experiment(
         library_builder=_pendulum_library,
         true_coefficients=_pendulum_true_coefficients,
         optimizer_factory=cfg.make_optimizer,
+        fit_models_fn=_pendulum_fit_multi_trajectory_weak_gls_models,
         coef_postprocess=lambda arr: arr.T,
         progress_desc="Monte Carlo pendulum MF",
     )

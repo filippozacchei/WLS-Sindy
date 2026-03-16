@@ -45,6 +45,52 @@ def _median_coefficients(opt: ps.EnsembleOptimizer) -> np.ndarray:
     return np.asarray(opt.coef_)
 
 
+def fit_multi_trajectory_weak_gls_models(
+    batch: MultiTrajectoryGLSData,
+    optimizer_factory,
+    *,
+    weak_block_builder: Callable[[np.ndarray, np.ndarray | None], tuple[np.ndarray, np.ndarray]],
+    noise_hf_abs: float,
+    noise_lf_abs: float,
+) -> Dict[str, np.ndarray]:
+    """Fit HF/LF/MF/MF_w directly in weak space by stacking per-trajectory blocks."""
+
+    def variance_field_for(traj: np.ndarray, noise_abs: float) -> np.ndarray:
+        return np.full(traj.shape[:-1], noise_abs**2, dtype=float)
+
+    def build_group(
+        trajectories: list[np.ndarray],
+        *,
+        weighted: bool,
+        noise_abs: float,
+    ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        theta_blocks: list[np.ndarray] = []
+        rhs_blocks: list[np.ndarray] = []
+        for traj in trajectories:
+            variance_field = variance_field_for(traj, noise_abs) if weighted else None
+            theta, rhs = weak_block_builder(traj, variance_field)
+            theta_blocks.append(theta)
+            rhs_blocks.append(rhs)
+        return theta_blocks, rhs_blocks
+
+    def fit_stacked(theta_blocks: list[np.ndarray], rhs_blocks: list[np.ndarray]) -> np.ndarray:
+        optimizer = optimizer_factory()
+        optimizer.fit(np.vstack(theta_blocks), np.vstack(rhs_blocks))
+        return _median_coefficients(optimizer)
+
+    theta_hf, rhs_hf = build_group(batch.hf, weighted=False, noise_abs=noise_hf_abs)
+    theta_lf, rhs_lf = build_group(batch.lf, weighted=False, noise_abs=noise_lf_abs)
+    theta_hf_w, rhs_hf_w = build_group(batch.hf, weighted=True, noise_abs=noise_hf_abs)
+    theta_lf_w, rhs_lf_w = build_group(batch.lf, weighted=True, noise_abs=noise_lf_abs)
+
+    return {
+        "HF": fit_stacked(theta_hf, rhs_hf),
+        "LF": fit_stacked(theta_lf, rhs_lf),
+        "MF": fit_stacked(theta_hf + theta_lf, rhs_hf + rhs_lf),
+        "MF_w": fit_stacked(theta_hf_w + theta_lf_w, rhs_hf_w + rhs_lf_w),
+    }
+
+
 def fit_multi_trajectory_gls_models(
     batch: MultiTrajectoryGLSData,
     library,
@@ -80,7 +126,6 @@ def fit_multi_trajectory_gls_models(
     weights = _expand_sample_weights(batch.hf, (1.0 / eps_hf) ** 2) + _expand_sample_weights(
         batch.lf, (1.0 / eps_lf) ** 2
     )
-    print(np.array(weights).shape)
     model_mf_w.fit(trajectories, t=t_argument, sample_weight=weights)
     print("MODEL MFW:")
     model_mf_w.print()
@@ -100,6 +145,7 @@ def run_multi_trajectory_gls_experiment(
     library_builder: Callable[[MultiTrajectoryGLSData, Any], Any],
     true_coefficients: Callable[[MultiTrajectoryGLSData, Any], np.ndarray],
     optimizer_factory: Callable[[], ps.EnsembleOptimizer],
+    fit_models_fn: Callable[..., Dict[str, np.ndarray]] | None = None,
     coef_postprocess: Callable[[np.ndarray], np.ndarray] | None = None,
     metric1_name: str = "MAE",
     metric2_name: str = "L0",
@@ -115,15 +161,25 @@ def run_multi_trajectory_gls_experiment(
 
     def single_run(run_idx: int):
         batch = dataset_builder(run_idx, cfg, noise_hf_abs, noise_lf_abs)
-        library = library_builder(batch, cfg)
-        coef_map = fit_multi_trajectory_gls_models(
-            batch,
-            library,
-            optimizer_factory,
-            t_argument=batch.t_argument,
-            noise_hf_abs=noise_hf_abs,
-            noise_lf_abs=noise_lf_abs,
-        )
+        if fit_models_fn is None:
+            library = library_builder(batch, cfg)
+            coef_map = fit_multi_trajectory_gls_models(
+                batch,
+                library,
+                optimizer_factory,
+                t_argument=batch.t_argument,
+                noise_hf_abs=noise_hf_abs,
+                noise_lf_abs=noise_lf_abs,
+            )
+        else:
+            coef_map = fit_models_fn(
+                batch,
+                cfg,
+                optimizer_factory,
+                t_argument=batch.t_argument,
+                noise_hf_abs=noise_hf_abs,
+                noise_lf_abs=noise_lf_abs,
+            )
         if coef_postprocess is not None:
             coef_map = {k: coef_postprocess(v) for k, v in coef_map.items()}
         C_true = true_coefficients(batch, cfg)
@@ -150,5 +206,6 @@ def run_multi_trajectory_gls_experiment(
 __all__ = [
     "MultiTrajectoryGLSData",
     "fit_multi_trajectory_gls_models",
+    "fit_multi_trajectory_weak_gls_models",
     "run_multi_trajectory_gls_experiment",
 ]
