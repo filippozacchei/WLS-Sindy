@@ -183,7 +183,7 @@ def plot_multifidelity_trajectories(X_hf, X_lf, X_clean):
             traj[:, 2],
             ".",
             alpha=0.15,
-            color=COLORS_MODELS["LF"],
+            color="tab:red",
             markersize=1.4,
         )
     for traj in X_hf[: min(5, len(X_hf))]:
@@ -193,7 +193,7 @@ def plot_multifidelity_trajectories(X_hf, X_lf, X_clean):
             traj[:, 2],
             ".",
             alpha=0.6,
-            color=COLORS_MODELS["HF"],
+            color="tab:blue",
             markersize=1.8,
         )
     ax.plot(
@@ -205,6 +205,7 @@ def plot_multifidelity_trajectories(X_hf, X_lf, X_clean):
         alpha=0.5,
     )
     ax.grid(False)
+    ax.set_axis_off()
     plt.show()
 
 def plot_trajectories_additive_noise(x_true, alpha=0.05):

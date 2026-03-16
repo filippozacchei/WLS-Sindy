@@ -176,7 +176,7 @@ class HopfMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
 
     # time discretisation
     dt: float = 1e-3
-    T_train: float = 10.0
+    T_train: float = 0.1
     T_true: float = 10.0
 
     # Hopf parameters

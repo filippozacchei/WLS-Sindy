@@ -337,8 +337,8 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     """
 
     # multi-fidelity settings
-    n_lf: int = 4
-    n_hf: int = 1
+    n_lf: int = 100
+    n_hf: int = 10
 
     # relative noise levels w.r.t. std(U_clean_ref)
     noise_lf_rel: float = 0.25
@@ -346,11 +346,11 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
 
     # grid / time
     N: int = 64
-    Nt: int = 200
+    Nt: int = 100
     Nt_std: int = 500
     L: float = 5.0
-    T: float = 2.5
-    T_std : float = 2.5
+    T: float = 0.1
+    T_std : float = 0.5
 
     # physical parameters
     mu: float = 1.0
@@ -360,16 +360,16 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     derivative_order: int = 2
     include_bias: bool = False
     p: int = 2
-    K: int = 500
-    K_std: int = 500
+    K: int = 100
+    K_std: int = 100
 
     # SINDy / optimizer settings
     stlsq_threshold: float = 0.5
-    stlsq_alpha: float = 1e-8
-    n_ensemble_models: int = 50
+    stlsq_alpha: float = 1e-12
+    n_ensemble_models: int = 100
 
     # randomness
-    seed_base: int = 1
+    seed_base: int = 0
 
     # output
     results_filename: str = "ns_isothermal_mf_errors.csv"
