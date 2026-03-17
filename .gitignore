@@ -44,10 +44,6 @@ htmlcov/
 Thumbs.db
 
 # Simulation outputs
-results/
-**/Results/
-**/results/
-**/output/
 data/
 *.job
 *.err
