@@ -1,16 +1,15 @@
 # Examples & Notebooks
 
-Every case lives in `examples/<case>/` with three artefacts: `part1.ipynb`, `part2.ipynb`, and `utils.py`. The table below lists the canonical entry points.
+Every case lives in `examples/<case>/` with notebook entry points for the multi-trajectory and heteroscedastic workflows. The table below lists the canonical entry points currently present in the repo.
 
 | Case | Part 1 (multi-trajectory GLS) | Part 2 (heteroscedastic GLS) |
 | --- | --- | --- |
-| Base diffusion tutorial | `examples/base/part1.ipynb` | `examples/base/part2.ipynb` |
+| Base diffusion tutorial | – | `examples/base/part2.ipynb` |
 | Lorenz | `examples/lorenz/part1.ipynb` | `examples/lorenz/part2.ipynb` |
 | Burgers | `examples/burgers/part1.ipynb` | `examples/burgers/part2.ipynb` |
 | Hopf | `examples/hopf/part1.ipynb` | `examples/hopf/part2.ipynb` |
 | Pendulum | `examples/pendulum/part1.ipynb` | `examples/pendulum/part2.ipynb` |
 | Isothermal flow | `examples/isothermal_flow/part1.ipynb` | `examples/isothermal_flow/part2.ipynb` |
-| Incompressible vorticity | `examples/incompressible_vorticity/part1.ipynb` | – |
 
 Each notebook follows the same storyline:
 
@@ -26,7 +25,7 @@ Use the links below to launch the notebooks in a live Binder session.
 
 | Case | Part 1 | Part 2 |
 | --- | --- | --- |
-| Base diffusion tutorial | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/base/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/base/part2.ipynb) |
+| Base diffusion tutorial | – | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/base/part2.ipynb) |
 | Lorenz | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/lorenz/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/lorenz/part2.ipynb) |
 | Burgers | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/burgers/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/burgers/part2.ipynb) |
 | Hopf | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/hopf/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/1-global-refactor?urlpath=lab/tree/examples/hopf/part2.ipynb) |

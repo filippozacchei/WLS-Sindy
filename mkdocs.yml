@@ -29,7 +29,7 @@ markdown_extensions:
 plugins:
   - search
   - mkdocs-jupyter:
-      execute: true
+      execute: false
       allow_errors: false
       include_source: true
 
@@ -37,7 +37,6 @@ nav:
   - Overview: index.md
   - Examples:
       - Overview: examples.md
-      - Base Part 1: notebooks/base/part1.ipynb
       - Base Part 2: notebooks/base/part2.ipynb
       - Burgers Part 1: notebooks/burgers/part1.ipynb
       - Burgers Part 2: notebooks/burgers/part2.ipynb
@@ -49,6 +48,7 @@ nav:
       - Isothermal Flow Part 2: notebooks/isothermal_flow/part2.ipynb
       - Pendulum Part 1: notebooks/pendulum/part1.ipynb
       - Pendulum Part 2: notebooks/pendulum/part2.ipynb
+  - Contributing: contributing.md
   - API Reference: api.md
   - Methodology: methodology.md
 
