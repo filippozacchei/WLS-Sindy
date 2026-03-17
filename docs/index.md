@@ -16,11 +16,12 @@ Welcome to the documentation hub for MF-SINDy. The content is authored in Markdo
 
 ## Base Tutorials
 
-Use the base notebook for a guided walkthrough that skips the heavy Monte Carlo loops:
+Use the base notebooks for guided walkthroughs that skip the heavier case-study machinery:
 
+- `examples/base/part1.ipynb` – multi-trajectory GLS with trajectory-wise fidelity weights.
 - `examples/base/part2.ipynb` – heteroscedastic GLS along a single trajectory.
 
-It covers the scalar ODE setup, weak regression assembly, and the weighted weak-form workflow in a lighter notebook than the full case studies.
+Together they cover the scalar ODE setup, trajectory-wise weighting across ensembles, weak regression assembly, and the weighted weak-form workflow in a lighter setting than the full case studies.
 
 ## Automation via GitHub Actions
 

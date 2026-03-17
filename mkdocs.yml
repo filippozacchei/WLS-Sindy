@@ -37,6 +37,7 @@ nav:
   - Overview: index.md
   - Examples:
       - Overview: examples.md
+      - Base Part 1: notebooks/base/part1.ipynb
       - Base Part 2: notebooks/base/part2.ipynb
       - Burgers Part 1: notebooks/burgers/part1.ipynb
       - Burgers Part 2: notebooks/burgers/part2.ipynb
