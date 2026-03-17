@@ -319,7 +319,6 @@ def compute_reference_coefficients(
     model_ref = ps.SINDy(feature_library=weak_lib_ref, optimizer=opt_ref)
 
     model_ref.fit(U_clean, t=t)
-    model_ref.print()
 
     C_true = model_ref.optimizer.coef_.copy()  # shape (n_states=3, n_terms)
     return C_true, U_clean, t, grid, base_library
@@ -337,8 +336,8 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     """
 
     # multi-fidelity settings
-    n_lf: int = 4
-    n_hf: int = 1
+    n_lf: int = 100
+    n_hf: int = 10
 
     # relative noise levels w.r.t. std(U_clean_ref)
     noise_lf_rel: float = 0.25
@@ -346,11 +345,11 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
 
     # grid / time
     N: int = 64
-    Nt: int = 200
+    Nt: int = 100
     Nt_std: int = 500
     L: float = 5.0
-    T: float = 2.5
-    T_std : float = 2.5
+    T: float = 0.1
+    T_std : float = 0.5
 
     # physical parameters
     mu: float = 1.0
@@ -360,16 +359,16 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     derivative_order: int = 2
     include_bias: bool = False
     p: int = 2
-    K: int = 500
-    K_std: int = 500
+    K: int = 100
+    K_std: int = 100
 
     # SINDy / optimizer settings
     stlsq_threshold: float = 0.5
-    stlsq_alpha: float = 1e-8
-    n_ensemble_models: int = 50
+    stlsq_alpha: float = 1e-12
+    n_ensemble_models: int = 100
 
     # randomness
-    seed_base: int = 1
+    seed_base: int = 0
 
     # output
     results_filename: str = "ns_isothermal_mf_errors.csv"
@@ -486,7 +485,6 @@ def _fit_stacked_weak_system(
     optimizer_factory,
 ) -> np.ndarray:
     optimizer = optimizer_factory()
-    print(optimizer)
     theta = np.vstack(theta_blocks)
     rhs = np.vstack(rhs_blocks)
     optimizer.fit(theta, rhs)
@@ -513,9 +511,7 @@ def _ns_fit_multi_trajectory_weak_gls_models(
     weak_seed = int(batch.metadata["weak_seed"])
     grid_shape = tuple(grid.shape[:-1])
     hf_variance = np.full(grid_shape, noise_hf_abs**2, dtype=float)
-    print(noise_hf_abs)
     lf_variance = np.full(grid_shape, noise_lf_abs**2, dtype=float)
-    print(noise_lf_abs)
     def build_group(
         trajectories: list[np.ndarray],
         *,

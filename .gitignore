@@ -44,10 +44,6 @@ htmlcov/
 Thumbs.db
 
 # Simulation outputs
-results/
-**/Results/
-**/results/
-**/output/
 data/
 *.job
 *.err
@@ -58,7 +54,7 @@ examples/**/old/
 # Generated media (raw renders)
 videos/generated/**
 !videos/generated/.gitkeep
-videos/presentations/**
+videos/presentations/** 
 !videos/presentations/.gitkeep
 # Allow specific documentation assets
 !docs/assets/images/method.pdf

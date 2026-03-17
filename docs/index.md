@@ -14,14 +14,13 @@ Welcome to the documentation hub for MF-SINDy. The content is authored in Markdo
 2. **Launch notebooks** – run `jupyter lab examples/<case>/part1.ipynb` (multi-trajectory GLS) or `part2.ipynb` (heteroscedastic GLS).
 3. **Cache outputs** – figures/video exports land in `examples/<case>/results/` (git-ignored) so experiments remain reproducible without polluting the repo.
 
-## Base Tutorials (single-shot Part 1/Part 2)
+## Base Tutorials
 
-Use the base notebooks for a guided walkthrough that skips the heavy Monte Carlo loops:
+Use the base notebook for a guided walkthrough that skips the heavy Monte Carlo loops:
 
-- `examples/base/part1.ipynb` – multi-trajectory GLS with trajectory-wise weights.
 - `examples/base/part2.ipynb` – heteroscedastic GLS along a single trajectory.
 
-Both cover trajectory generation (`examples/base/utils.py`), weak regression assembly, and ensemble forecasting hooks.
+It covers the scalar ODE setup, weak regression assembly, and the weighted weak-form workflow in a lighter notebook than the full case studies.
 
 ## Automation via GitHub Actions
 
