@@ -88,3 +88,101 @@ def plot_multifidelity_trajectories(X_hf, X_lf, X_ref, x, t):
 
     plt.tight_layout(pad=0.05)
     plt.show()
+
+
+def plot_trajectories_additive_noise(
+    x_true,
+    x_grid,
+    alpha=0.25,
+    sigma0=0.0,
+    time_indices=None,
+):
+    """Plot clean/noisy Burgers trajectories together on one panel."""
+    u_true = np.asarray(x_true)
+    x = np.asarray(x_grid).squeeze()
+
+    if u_true.ndim == 3:
+        u_true = u_true[:, :, 0]
+    if u_true.shape[0] < u_true.shape[1]:
+        u_true = u_true.T
+
+    dx = x[1] - x[0]
+    grad = (np.roll(u_true, -1, axis=1) - np.roll(u_true, 1, axis=1)) / (2.0 * dx)
+    std = sigma0 + alpha * np.abs(grad)
+    u_noisy = u_true + std * np.random.randn(*u_true.shape)
+
+    t = np.arange(u_true.shape[0], dtype=float)
+    Xg, Tg = np.meshgrid(x, t, indexing="ij")
+
+    fig = plt.figure(figsize=(5, 3.5), dpi=150)
+    ax = fig.add_subplot(111, projection="3d")
+
+    ax.plot_surface(
+        Xg,
+        Tg,
+        u_noisy.T,
+        color="tab:red",
+        alpha=0.25,
+        linewidth=0,
+        antialiased=True,
+        shade=False,
+    )
+
+    ax.plot_surface(
+        Xg,
+        Tg,
+        u_true.T,
+        color="tab:blue",
+        alpha=0.45,
+        linewidth=0,
+        antialiased=True,
+        shade=False,
+    )
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax.set_axis_off()
+    ax.grid(False)
+    plt.tight_layout()
+    plt.show()
+    return u_noisy
+
+
+def plot_residuals(x_true, x_noisy, x_grid, time_indices=None):
+    """Plot Burgers residual magnitude as a 3D field over space and time."""
+    u_true = np.asarray(x_true)
+    u_noisy = np.asarray(x_noisy)
+    x = np.asarray(x_grid).squeeze()
+    if u_true.ndim == 3:
+        u_true = u_true[:, :, 0]
+    if u_noisy.ndim == 3:
+        u_noisy = u_noisy[:, :, 0]
+    if u_true.shape[0] < u_true.shape[1]:
+        u_true = u_true.T
+    if u_noisy.shape[0] < u_noisy.shape[1]:
+        u_noisy = u_noisy.T
+
+    eps = np.abs(u_noisy - u_true)
+    t = np.arange(eps.shape[0], dtype=float)
+    Xg, Tg = np.meshgrid(x, t, indexing="ij")
+
+    fig = plt.figure(figsize=(5, 3.5), dpi=150)
+    ax = fig.add_subplot(111, projection="3d")
+    ax.plot_surface(
+        Xg,
+        Tg,
+        eps.T,
+        color="#b32425",
+        alpha=0.9,
+        linewidth=0,
+        antialiased=True,
+        shade=False,
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax.set_axis_off()
+    ax.grid(False)
+    plt.tight_layout(pad=0.05)
+    plt.show()

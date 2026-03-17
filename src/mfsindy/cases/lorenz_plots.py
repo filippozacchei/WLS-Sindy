@@ -236,6 +236,7 @@ def plot_trajectories_additive_noise(x_true, alpha=0.05):
     )
 
     ax.legend()
+    ax.set_axis_off()
     plt.show()
     return x_noisy
 

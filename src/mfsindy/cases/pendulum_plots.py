@@ -73,3 +73,46 @@ def plot_multifidelity_trajectories(X_hf, X_lf, X_ref):
 
     plt.tight_layout(pad=0.05)
     plt.show()
+
+
+def plot_trajectories_additive_noise(x_true, alpha=0.15, sigma0=0.0):
+    """Plot a clean pendulum trajectory together with state-dependent noisy samples."""
+    x_true = np.asarray(x_true)
+
+    omega_mag = np.abs(x_true[:, 1:2])
+    std = sigma0 + alpha * omega_mag
+    x_noisy = x_true + std * np.random.randn(*x_true.shape)
+
+    fig, ax = plt.subplots(figsize=(5, 5), dpi=150)
+    ax.plot(x_true[:, 0], x_true[:, 1], "-", color="black", linewidth=1.0)
+    ax.scatter(
+        x_noisy[:, 0],
+        x_noisy[:, 1],
+        s=4,
+        color="tab:blue",
+        alpha=0.35,
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.grid(False)
+    plt.tight_layout()
+    plt.show()
+    return x_noisy
+
+
+def plot_residuals(x_true, x_noisy):
+    """Plot the absolute residual of the first pendulum component."""
+    x_true = np.asarray(x_true)
+    x_noisy = np.asarray(x_noisy)
+    eps_x = np.abs(x_noisy[:, 0] - x_true[:, 0])
+
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=300)
+    ax.plot(eps_x, lw=0.9, color="#b32425")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.tick_params(axis="both", width=1.0, length=4)
+    ax.grid(False)
+    plt.tight_layout()
+    plt.show()
