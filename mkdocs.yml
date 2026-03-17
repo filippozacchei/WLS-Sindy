@@ -29,7 +29,7 @@ markdown_extensions:
 plugins:
   - search
   - mkdocs-jupyter:
-      execute: false
+      execute: true
       allow_errors: false
       include_source: true
 
