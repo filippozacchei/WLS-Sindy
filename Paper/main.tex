@@ -1,4 +1,4 @@
-%=========================================================
+ %=========================================================
 % main.tex — Elsevier article template
 %=========================================================
 \documentclass[final,3p,10.5pt]{elsarticle}
@@ -21,13 +21,33 @@
 \usepackage{setspace}
 \usepackage{xcolor}
 \usepackage{natbib}
-
+\usepackage[acronym]{glossaries}
+\newacronym[plural=FEAs]{fea}{FEA}{Finite Element Analysis}
+\newacronym{sindy}{SINDy}{Sparse Identification of Nonlinear Dynamics}
+\newacronym{wls}{WLS}{Weighted Least-Squares}
+\newacronym{gls}{GLS}{Generalized Least-Squares}
+\newacronym{blue}{BLUE}{Best Linear Unbiased Estimator}
+\newacronym{stls}{STLS}{Sequential Threshold Least Squares}
+\newacronym{ode}{ODE}{Ordinary Differential Equation}
+\newacronym{pde}{PDE}{Partial Differential Equation}
+\newacronym{stridge}{STRidge}{Sequential Thresholded Ridge Regression}
+\newacronym{sr3}{SR3}{Sparse Relaxed Regularized Regression}
+\newacronym{gp}{GP}{Gaussian process}
+\newacronym{pce}{PCE}{polynomial chaos expansion}
+\makeglossaries
 %---------------------------------------------------------
 % BIBLIOGRAPHY STYLE
 %---------------------------------------------------------
 % Elsevier recommends using biblatex with biber or natbib
-\bibliographystyle{unsrt} % or elsarticle-num
+\usepackage[
+    backend=biber,
+    style=ieee,
+    doi=true,
+    url=true,
+    isbn=false
+]{biblatex}
 
+\addbibresource{references.bib} % replace with your file
 %---------------------------------------------------------
 % DOCUMENT INFORMATION
 %---------------------------------------------------------
@@ -77,45 +97,41 @@
 
 \end{frontmatter}
 
-%=========================================================
-% INTRODUCTION
-%=========================================================
-\section{Introduction}
-\begin{enumerate}
-    \item First Paragraph (Surrogate Models for Digitial Twin MOdel BAsed Engineering)
-        \begin{itemize}
-            \item Why is this interesting and Important
-            \item Why is it Challenging (go in details of what makes it challeging)
-            \item Challenges found by previous works
-            \item WHat changed for us today
-            \item In this work we do
-        \end{itemize}
-    \item Second PAragraph - Third *Literature*: 50 papers
-    \begin{itemize}
-        \item Surrogates for Digital twins with multi fidelity data
-        \item Difference from standard auto-regressive and using only one surrogate 
-        \item Sindy for Surrogate modeling : pros (flexibility for control physics data limits) and lack of multi fidelity
-    \end{itemize}
-    \item Paragraph 4: what we do, expanding last bullet of first paragraph
-\end{enumerate}
+\input{introduction.tex}
+\input{background.tex}
+\input{methodology.tex}
 
-\begin{figure}
-    \includegraphics[width=\textwidth]{Figure/figure1.png}
-\end{figure}
+
+% % Comments
+% - Use acquire multi fidelity data
+% - Adjust legend
+% - Dark Blue , Light Blue Orange 
+% - Estimate Noise Sigma = , put Sigma = x times Noise 0
+% - Remove ticks from Estimate noise level picture
+
+% - Use Boxes (1: Acquire Data: put title on top of the border)
+% - make sindy models bigger, can get rid of some labels in the ensmeble *like on top  of the stack)
+% - porportions 1-1-2
+% - make the colours more increasing with the fidelity - if possibel show explicitly the weighting 
+% - use medium fidelity colour for the prediction use medium fidelity (and stick to Lorenz) 
+% - put on the lower box the psoterior disrtributions of the coefficients and show the difference hf - lf - mf
+% - try to look for 2 or three fidelities 
+% - \textbf{try to different with colour maps}
+
+
+% - crop text and put in keynote
+% - should be around same size of the caption for big font, 10/20% smaller for other text
+% - assume variance is a bit too much, take a page to talk about the unknown variance case.
+
+% - change Name weighted library part 2
+% - increase Size
 
 %=========================================================
 % METHODS
 %=========================================================
-\section{Background}
-\subsection{Sparse Identification of Dynamical Systems}
-\begin{itemize}
-    \item STLSQ
-    \item Kaptanoglu (Stability) - Loiseau JC (Constrained SR3) for modifying Least Squares
-\end{itemize}
-\subsection{Ensemble - Weak Sindy}
-\subsection{Weighted Least Squares}
 
-\section{Methodology}
+
+
 % MEthods 
 
 %=========================================================
@@ -124,9 +140,14 @@
 \section{Results}
 \input{result.tex}
  \nocite{*}
+
 \begin{figure}
-    \includegraphics[width=\textwidth]{Figure/figure2.png}
+    \includegraphics[width=\textwidth]{Figure/figure2.pdf}
 \end{figure}
+- Syistem -> Equation
+- Score instead of MF-HF
+- Horizontal lines
+- Too much white space
 
 
 Include Summaries for results for both part 1 and 2
@@ -146,6 +167,10 @@ Future Directions
 Discuss implications and limitations. 
 Compare your findings with existing work.
 
+\begin{figure}
+    \includegraphics[width=\textwidth]{Figure/figure3.pdf}
+    \caption{\textcolor{red}{Caption? Equations are too small, and also scales on the plots. }}
+\end{figure}
 %=========================================================
 % CONCLUSION
 %=========================================================
@@ -156,6 +181,5 @@ Provide a concise summary of the main outcomes and suggestions for future work.
 %=========================================================
 % REFERENCES
 %=========================================================
-\bibliography{references}
-
+\printbibliography
 \end{document}
