@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import numpy as np
@@ -50,6 +51,57 @@ class WeightedWeakEnsembleFit:
     coefficients: np.ndarray
     ensemble_coefficients: np.ndarray
     feature_names: list[str]
+
+
+@dataclass
+class EnsembleIntervalSummary:
+    """Median and quantile envelope for one ensemble output."""
+
+    median: np.ndarray
+    lower: np.ndarray
+    upper: np.ndarray
+
+
+@dataclass
+class DoublePendulumModelMetrics:
+    """Forecast/derivative metrics for one fitted fidelity model."""
+
+    forecast_rmse: float
+    forecast_width: float
+    forecast_coverage: float
+    forecast_valid_fraction: float
+    derivative_rmse: float
+    derivative_width: float
+    derivative_coverage: float
+    derivative_valid_fraction: float
+
+
+@dataclass
+class DoublePendulumEvaluation:
+    """Future-trajectory evaluation for a set of fitted fidelity models."""
+
+    t_future: np.ndarray
+    true_future: np.ndarray
+    true_future_derivatives: np.ndarray
+    forecast_summaries: dict[str, EnsembleIntervalSummary]
+    derivative_summaries: dict[str, EnsembleIntervalSummary]
+    metrics: dict[str, DoublePendulumModelMetrics]
+
+
+@contextmanager
+def _temporary_numpy_seed(seed: int | None):
+    """Temporarily set the global NumPy RNG seed and restore it afterwards."""
+
+    if seed is None:
+        yield
+        return
+
+    state = np.random.get_state()  # noqa: NPY002
+    np.random.seed(int(seed))  # noqa: NPY002
+    try:
+        yield
+    finally:
+        np.random.set_state(state)  # noqa: NPY002
 
 
 def sample_double_pendulum_initial_condition(
@@ -547,7 +599,6 @@ def make_weighted_double_pendulum_weak_library(
 ) -> WeightedWeakPDELibrary:
     """Create the weighted weak library for one noisy trajectory."""
 
-    np.random.seed(int(weak_seed))  # noqa: NPY002
     t_grid = np.asarray(t_grid, dtype=float)
     if t_grid.ndim == 1:
         t_grid = t_grid[:, None]
@@ -863,6 +914,275 @@ def summarize_ensemble_forecast(
     return median, lower, upper
 
 
+def _compute_interval_metrics(
+    truth: np.ndarray,
+    summary: EnsembleIntervalSummary,
+) -> tuple[float, float, float, float]:
+    """Compute RMSE, band width, coverage, and valid fraction."""
+
+    truth = np.asarray(truth, dtype=float)
+    valid = (
+        np.isfinite(truth)
+        & np.isfinite(summary.median)
+        & np.isfinite(summary.lower)
+        & np.isfinite(summary.upper)
+    )
+    valid_fraction = float(np.mean(valid))
+
+    if not np.any(valid):
+        return np.nan, np.nan, np.nan, valid_fraction
+
+    rmse = float(np.sqrt(np.mean((summary.median[valid] - truth[valid]) ** 2)))
+    width = float(np.nanmean(summary.upper - summary.lower))
+    coverage = float(
+        np.mean(
+            (truth[valid] >= summary.lower[valid])
+            & (truth[valid] <= summary.upper[valid])
+        )
+    )
+    return rmse, width, coverage, valid_fraction
+
+
+def evaluate_double_pendulum_models(
+    dataset: DoublePendulumForecastingDataset,
+    fit_results: dict[str, WeightedWeakEnsembleFit],
+    *,
+    forecast_horizon: float = 5.0,
+    forecast_dt: float | None = None,
+    quantile_band: tuple[float, float] = (0.1, 0.9),
+    poly_degree: int = DEFAULT_POLY_DEGREE,
+    library_kind: str = DEFAULT_LIBRARY_KIND,
+    max_abs_state: float = 50.0,
+) -> DoublePendulumEvaluation:
+    """Evaluate fitted HF/LF/MF models on future states and derivatives."""
+
+    if forecast_dt is None:
+        if dataset.t.size < 2:
+            raise ValueError("dataset.t must contain at least two time samples.")
+        forecast_dt = float(dataset.t[1] - dataset.t[0])
+
+    y0_forecast = np.asarray(dataset.hf.clean[0, -1], dtype=float)
+    t_future, true_future = simulate_double_pendulum_trajectory(
+        y0=y0_forecast,
+        t_final=forecast_horizon,
+        dt=forecast_dt,
+        m1=dataset.m1,
+        m2=dataset.m2,
+        l1=dataset.l1,
+        l2=dataset.l2,
+        g=dataset.g,
+    )
+    true_future_derivatives = compute_double_pendulum_derivatives(
+        true_future,
+        m1=dataset.m1,
+        m2=dataset.m2,
+        l1=dataset.l1,
+        l2=dataset.l2,
+        g=dataset.g,
+    )
+
+    forecast_summaries: dict[str, EnsembleIntervalSummary] = {}
+    derivative_summaries: dict[str, EnsembleIntervalSummary] = {}
+    metrics: dict[str, DoublePendulumModelMetrics] = {}
+
+    for model_name, result in fit_results.items():
+        _, ensemble_forecast = simulate_ensemble_sindy_forecast(
+            result.ensemble_coefficients,
+            y0_forecast,
+            poly_degree=poly_degree,
+            library_kind=library_kind,
+            m1=dataset.m1,
+            m2=dataset.m2,
+            l1=dataset.l1,
+            t_final=forecast_horizon,
+            dt=forecast_dt,
+            max_abs_state=max_abs_state,
+        )
+        forecast_summary = EnsembleIntervalSummary(
+            *summarize_ensemble_forecast(
+                ensemble_forecast,
+                quantile_band=quantile_band,
+            )
+        )
+        forecast_summaries[model_name] = forecast_summary
+
+        ensemble_derivatives = evaluate_ensemble_sindy_derivatives(
+            true_future,
+            result.ensemble_coefficients,
+            poly_degree=poly_degree,
+            library_kind=library_kind,
+            m1=dataset.m1,
+            m2=dataset.m2,
+            l1=dataset.l1,
+        )
+        derivative_summary = EnsembleIntervalSummary(
+            *summarize_ensemble_forecast(
+                ensemble_derivatives,
+                quantile_band=quantile_band,
+            )
+        )
+        derivative_summaries[model_name] = derivative_summary
+
+        (
+            forecast_rmse,
+            forecast_width,
+            forecast_coverage,
+            forecast_valid_fraction,
+        ) = _compute_interval_metrics(true_future, forecast_summary)
+        (
+            derivative_rmse,
+            derivative_width,
+            derivative_coverage,
+            derivative_valid_fraction,
+        ) = _compute_interval_metrics(true_future_derivatives, derivative_summary)
+
+        metrics[model_name] = DoublePendulumModelMetrics(
+            forecast_rmse=forecast_rmse,
+            forecast_width=forecast_width,
+            forecast_coverage=forecast_coverage,
+            forecast_valid_fraction=forecast_valid_fraction,
+            derivative_rmse=derivative_rmse,
+            derivative_width=derivative_width,
+            derivative_coverage=derivative_coverage,
+            derivative_valid_fraction=derivative_valid_fraction,
+        )
+
+    return DoublePendulumEvaluation(
+        t_future=t_future,
+        true_future=true_future,
+        true_future_derivatives=true_future_derivatives,
+        forecast_summaries=forecast_summaries,
+        derivative_summaries=derivative_summaries,
+        metrics=metrics,
+    )
+
+
+def benchmark_double_pendulum_fidelities(
+    seeds: list[int] | np.ndarray,
+    *,
+    n_hf: int = 1,
+    n_lf: int = 5,
+    t_final: float = 10.0,
+    dt: float = 0.01,
+    hf_noise_scale: float = DEFAULT_HF_NOISE_SCALE,
+    lf_noise_scale: float = DEFAULT_LF_NOISE_SCALE,
+    theta_range: tuple[float, float] = DEFAULT_THETA_RANGE,
+    omega_range: tuple[float, float] = DEFAULT_OMEGA_RANGE,
+    m1: float = 1.0,
+    m2: float = 1.0,
+    l1: float = 1.0,
+    l2: float = 1.0,
+    g: float = 9.81,
+    poly_degree: int = DEFAULT_POLY_DEGREE,
+    library_kind: str = DEFAULT_LIBRARY_KIND,
+    stlsq_threshold: float = 0.3,
+    stlsq_alpha: float = 1e-6,
+    n_ensemble_models: int = 25,
+    n_weak_cells: int = 200,
+    weak_window_length: float = 0.5,
+    p: int = 4,
+    forecast_horizon: float = 5.0,
+    forecast_dt: float | None = None,
+    quantile_band: tuple[float, float] = (0.1, 0.9),
+    max_abs_state: float = 50.0,
+) -> list[dict[str, float | int | str]]:
+    """Run the current HF/LF/MF benchmark for a collection of seeds."""
+
+    rows: list[dict[str, float | int | str]] = []
+    for seed in seeds:
+        seed_int = int(seed)
+        dataset = build_double_pendulum_dataset(
+            n_hf=n_hf,
+            n_lf=n_lf,
+            t_final=t_final,
+            dt=dt,
+            hf_noise_scale=hf_noise_scale,
+            lf_noise_scale=lf_noise_scale,
+            seed=seed_int,
+            theta_range=theta_range,
+            omega_range=omega_range,
+            m1=m1,
+            m2=m2,
+            l1=l1,
+            l2=l2,
+            g=g,
+        )
+        fit_results = fit_double_pendulum_hf_lf_models(
+            dataset,
+            poly_degree=poly_degree,
+            library_kind=library_kind,
+            stlsq_threshold=stlsq_threshold,
+            stlsq_alpha=stlsq_alpha,
+            n_ensemble_models=n_ensemble_models,
+            weak_seed=seed_int,
+            n_weak_cells=n_weak_cells,
+            weak_window_length=weak_window_length,
+            p=p,
+        )
+        evaluation = evaluate_double_pendulum_models(
+            dataset,
+            fit_results,
+            forecast_horizon=forecast_horizon,
+            forecast_dt=forecast_dt,
+            quantile_band=quantile_band,
+            poly_degree=poly_degree,
+            library_kind=library_kind,
+            max_abs_state=max_abs_state,
+        )
+        for model_name, metric in evaluation.metrics.items():
+            rows.append(
+                {
+                    "seed": seed_int,
+                    "model": model_name,
+                    "forecast_rmse": metric.forecast_rmse,
+                    "forecast_width": metric.forecast_width,
+                    "forecast_coverage": metric.forecast_coverage,
+                    "forecast_valid_fraction": metric.forecast_valid_fraction,
+                    "derivative_rmse": metric.derivative_rmse,
+                    "derivative_width": metric.derivative_width,
+                    "derivative_coverage": metric.derivative_coverage,
+                    "derivative_valid_fraction": metric.derivative_valid_fraction,
+                }
+            )
+    return rows
+
+
+def summarize_fidelity_benchmark(
+    benchmark_rows: list[dict[str, float | int | str]],
+) -> list[dict[str, float | int | str]]:
+    """Aggregate benchmark rows into mean/std summaries by model."""
+
+    if not benchmark_rows:
+        return []
+
+    metric_names = [
+        "forecast_rmse",
+        "forecast_width",
+        "forecast_coverage",
+        "forecast_valid_fraction",
+        "derivative_rmse",
+        "derivative_width",
+        "derivative_coverage",
+        "derivative_valid_fraction",
+    ]
+    model_names = sorted({str(row["model"]) for row in benchmark_rows})
+    summaries: list[dict[str, float | int | str]] = []
+
+    for model_name in model_names:
+        model_rows = [row for row in benchmark_rows if row["model"] == model_name]
+        summary: dict[str, float | int | str] = {
+            "model": model_name,
+            "n_seeds": len({int(row["seed"]) for row in model_rows}),
+        }
+        for metric_name in metric_names:
+            values = np.asarray([row[metric_name] for row in model_rows], dtype=float)
+            summary[f"{metric_name}_mean"] = float(np.nanmean(values))
+            summary[f"{metric_name}_std"] = float(np.nanstd(values))
+        summaries.append(summary)
+
+    return summaries
+
+
 __all__ = [
     "DEFAULT_HF_NOISE_SCALE",
     "DEFAULT_LF_NOISE_SCALE",
@@ -870,13 +1190,18 @@ __all__ = [
     "DEFAULT_OMEGA_RANGE",
     "DEFAULT_POLY_DEGREE",
     "DEFAULT_THETA_RANGE",
+    "DoublePendulumEvaluation",
     "DoublePendulumForecastingDataset",
+    "DoublePendulumModelMetrics",
     "DoublePendulumObservationSet",
+    "EnsembleIntervalSummary",
     "WeightedWeakEnsembleFit",
     "add_omega_magnitude_noise",
+    "benchmark_double_pendulum_fidelities",
     "build_double_pendulum_dataset",
     "build_double_pendulum_feature_library",
     "compute_double_pendulum_derivatives",
+    "evaluate_double_pendulum_models",
     "evaluate_ensemble_sindy_derivatives",
     "fit_double_pendulum_hf_lf_models",
     "fit_double_pendulum_weighted_weak_model",
@@ -889,4 +1214,5 @@ __all__ = [
     "simulate_double_pendulum_trajectory",
     "simulate_ensemble_sindy_forecast",
     "summarize_ensemble_forecast",
+    "summarize_fidelity_benchmark",
 ]
