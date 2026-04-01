@@ -17,6 +17,8 @@ Each notebook follows the same storyline:
 2. Fit HF/LF/MF/MF\_w ensemble models via the shared experiment utilities.
 3. Visualise coefficient MAE/support errors with `mfsindy.plots.bubble_hist`.
 
+The repo may also include standalone notebooks outside the part-based template when a case is forecast-centric rather than coefficient-centric. The double-pendulum sensor-fusion example lives at `examples/double_pendulum/forecasting.ipynb`.
+
 > **Tip:** keep large outputs under `examples/<case>/results/`; those folders are git-ignored so repeated runs stay clean.
 
 ## Run In Binder

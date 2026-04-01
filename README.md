@@ -39,7 +39,7 @@ The package exposes reusable case modules (`mfsindy.cases.*`), plotting helpers,
 
 ## Examples
 
-Each case now lives under `examples/<case>/` with exactly three touch points (`part1.ipynb`, `part2.ipynb`, `utils.py`). Typical workflow:
+Each standard case lives under `examples/<case>/` with exactly three touch points (`part1.ipynb`, `part2.ipynb`, `utils.py`). Typical workflow:
 
 ```bash
 cd examples/lorenz
@@ -48,6 +48,8 @@ jupyter lab part2.ipynb   # heteroskedastic GLS scenario
 ```
 
 Use `part1.ipynb` for the multi-trajectory weighting scenario and `part2.ipynb` for the heteroskedastic run (Burgers, Hopf, Lorenz, pendulum, isothermal flow, and the base diffusion tutorial).
+
+The repository can also host standalone workflows when the usual part-1/part-2 split is not the right fit. For example, `examples/double_pendulum/forecasting.ipynb` compares HF-only, LF-only, fused, and inverse-variance weighted sensor ensembles on a forecast task.
 
 ## Development Workflow
 
