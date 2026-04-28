@@ -27,9 +27,11 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
+    WeakValidationBlock,
     coefficient_errors,
     fit_multi_trajectory_weak_gls_models,
     fit_intra_trajectory_gls_models,
+    get_library_feature_names,
     run_intra_trajectory_gls_experiment,
     run_monte_carlo_experiment,
     run_multi_trajectory_gls_experiment,
@@ -61,7 +63,7 @@ class BurgersConfig(MonteCarloConfig, EnsembleConfigMixin):
     # Weak-library settings
     poly_degree: int = 1
     derivative_order: int = 2
-    H_xt: float | None = None  # test-function support; None → library default
+    H_xt: list[float] | None = None  # per-dimension test-function support
     K: int = 100               # number of weak test functions
     include_bias: bool = True
 
@@ -87,7 +89,7 @@ class BurgersMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # multi-fidelity settings (numbers of trajectories)
     n_lf: int = 100
     n_hf: int = 10
-    H_xt: float | None = None
+    H_xt: list[float] | None = None
     K: int = 100
 
     # relative noise levels (wrt state std)
@@ -521,6 +523,207 @@ def run_burgers_multi_trajectory_gls_experiment(
         fit_models_fn=_burgers_fit_multi_trajectory_weak_gls_models,
         progress_desc="Monte Carlo Burgers MF",
     )
+
+
+def build_burgers_intra_trajectory_artifacts(
+    data: np.ndarray,
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    *,
+    variance: np.ndarray,
+    cfg: BurgersConfig,
+    weak_seed: int | None = None,
+) -> IntraTrajectoryGLSData:
+    """Construct Burgers weak-form artifacts for a provided trajectory."""
+
+    data = np.asarray(data, dtype=float)
+    variance = np.asarray(variance, dtype=float)
+    x_grid = np.asarray(x_grid, dtype=float)
+    t_grid = np.asarray(t_grid, dtype=float)
+
+    if data.ndim != 3 or data.shape[-1] != 1:
+        raise ValueError("data must have shape (n_t, n_x, 1) or (n_x, n_t, 1).")
+
+    if data.shape[0] == t_grid.shape[0]:
+        U = data
+    elif data.shape[1] == t_grid.shape[0]:
+        U = np.swapaxes(data, 0, 1)
+        variance = variance.T
+    else:
+        raise ValueError("Could not align data with t_grid along the time axis.")
+
+    if variance.shape != U.shape[:-1]:
+        raise ValueError(f"variance must match data[..., 0] shape {U.shape[:-1]}, got {variance.shape}.")
+
+    X, T = np.meshgrid(x_grid, t_grid)
+    XT = np.asarray([X, T]).T
+    base_library = ps.PolynomialLibrary(
+        degree=cfg.poly_degree,
+        include_bias=False,
+    )
+    tf_seed = cfg.seed_base if weak_seed is None else int(weak_seed)
+
+    common_kwargs = dict(
+        function_library=base_library,
+        derivative_order=cfg.derivative_order,
+        spatiotemporal_grid=XT,
+        is_uniform=True,
+        K=cfg.K,
+        H_xt=cfg.H_xt,
+        include_bias=cfg.include_bias,
+    )
+
+    np.random.seed(tf_seed)
+    weak_lib = WeakPDELibrary(**common_kwargs)
+
+    variance_scaled = variance / np.mean(variance)
+    np.random.seed(tf_seed)
+    weighted_weak_lib_var = WeightedWeakPDELibrary(
+        spatiotemporal_weights=variance_scaled,
+        **common_kwargs,
+    )
+
+    np.random.seed(tf_seed)
+    weighted_weak_lib_ones = WeightedWeakPDELibrary(
+        spatiotemporal_weights=np.ones_like(variance_scaled),
+        **common_kwargs,
+    )
+
+    return IntraTrajectoryGLSData(
+        data=U,
+        t_argument=t_grid,
+        libraries={
+            "No weighting": weak_lib,
+            "Variance GLS": weighted_weak_lib_var,
+            "Ones GLS": weighted_weak_lib_ones,
+        },
+        true_coefficients=build_true_burgers_coefficients(cfg.nu),
+    )
+
+
+def fit_burgers_multi_trajectory_coefficients(
+    cfg: BurgersMultiTrajectoryGLSConfig,
+    *,
+    hf_trajectories: list[np.ndarray],
+    lf_trajectories: list[np.ndarray],
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    noise_hf_abs: float,
+    noise_lf_abs: float,
+    weak_seed: int | None = None,
+) -> dict[str, np.ndarray]:
+    """Fit HF/LF/MF/MF_w Burgers coefficient maps on arbitrary trajectory sets."""
+
+    batch = MultiTrajectoryGLSData(
+        hf=hf_trajectories,
+        lf=lf_trajectories,
+        t_argument=cfg.dt,
+        metadata={
+            "t": np.asarray(t_grid, dtype=float),
+            "x": np.asarray(x_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+    return _burgers_fit_multi_trajectory_weak_gls_models(
+        batch,
+        cfg,
+        cfg.make_optimizer,
+        t_argument=cfg.dt,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
+
+
+def build_burgers_weak_validation_blocks(
+    cfg: BurgersMultiTrajectoryGLSConfig | BurgersConfig,
+    trajectories: list[np.ndarray],
+    *,
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    weak_seed: int | None = None,
+    group_name: str = "validation",
+) -> list[WeakValidationBlock]:
+    """Build held-out weak-form blocks for Burgers trajectories."""
+
+    dummy_cfg = BurgersMultiTrajectoryGLSConfig(
+        L=cfg.L,
+        NX=cfg.NX,
+        dt=cfg.dt,
+        T_train=float(np.asarray(t_grid, dtype=float)[-1] - np.asarray(t_grid, dtype=float)[0]),
+        nu=cfg.nu,
+        H_xt=cfg.H_xt,
+        K=cfg.K,
+        derivative_order=cfg.derivative_order,
+        include_bias=cfg.include_bias,
+        poly_degree=cfg.poly_degree,
+        stlsq_threshold=cfg.stlsq_threshold,
+        n_ensemble_models=cfg.n_ensemble_models,
+        seed_base=cfg.seed_base,
+    )
+    batch = MultiTrajectoryGLSData(
+        hf=[],
+        lf=[],
+        t_argument=cfg.dt,
+        metadata={
+            "t": np.asarray(t_grid, dtype=float),
+            "x": np.asarray(x_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+
+    blocks: list[WeakValidationBlock] = []
+    for traj_idx, trajectory in enumerate(trajectories):
+        library = _burgers_make_weak_library(batch, dummy_cfg, variance_field=None)
+        theta = np.asarray(library.fit_transform([trajectory])[0])
+        rhs = np.asarray(library.convert_u_dot_integral(trajectory))
+        blocks.append(
+            WeakValidationBlock(
+                theta=theta,
+                rhs=rhs,
+                group=group_name,
+                trajectory=traj_idx,
+                block=0,
+            )
+        )
+    return blocks
+
+
+def get_burgers_feature_names(
+    cfg: BurgersMultiTrajectoryGLSConfig | BurgersConfig,
+    *,
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    reference_trajectory: np.ndarray,
+) -> tuple[str, ...]:
+    """Return readable Burgers weak-library feature names."""
+
+    dummy_cfg = BurgersMultiTrajectoryGLSConfig(
+        L=cfg.L,
+        NX=cfg.NX,
+        dt=cfg.dt,
+        T_train=float(np.asarray(t_grid, dtype=float)[-1] - np.asarray(t_grid, dtype=float)[0]),
+        nu=cfg.nu,
+        H_xt=cfg.H_xt,
+        K=cfg.K,
+        derivative_order=cfg.derivative_order,
+        include_bias=cfg.include_bias,
+        poly_degree=cfg.poly_degree,
+        stlsq_threshold=cfg.stlsq_threshold,
+        n_ensemble_models=cfg.n_ensemble_models,
+        seed_base=cfg.seed_base,
+    )
+    batch = MultiTrajectoryGLSData(
+        hf=[],
+        lf=[],
+        t_argument=cfg.dt,
+        metadata={
+            "t": np.asarray(t_grid, dtype=float),
+            "x": np.asarray(x_grid, dtype=float),
+            "weak_seed": cfg.seed_base,
+        },
+    )
+    library = _burgers_make_weak_library(batch, dummy_cfg, variance_field=None)
+    return get_library_feature_names(library, reference_trajectory, input_features=("u",))
 
 # ---------------------------------------------------------------------------
 # Helper: get one set of GLS coefficients for animation / forecasting
