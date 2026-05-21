@@ -20,11 +20,14 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
+    build_polynomial_rollout_models,
     fit_multi_trajectory_weak_gls_models,
     run_intra_trajectory_gls_experiment,
     run_multi_trajectory_gls_experiment,
 )
 from mfsindy.weighted_weak_pde_library import WeightedWeakPDELibrary
+
+LORENZ_STATE_NAMES = ("x", "y", "z")
 
 
 
@@ -190,6 +193,9 @@ class LorenzMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
 
     # SINDy settings
     poly_degree: int = 2
+    H_xt: float | None = None
+    K: int | None = None
+    p: int | None = None
     stlsq_threshold: float = 0.5
     n_ensemble_models: int = 200
 
@@ -251,9 +257,18 @@ def _lorenz_library(batch: MultiTrajectoryGLSData, cfg: LorenzMultiTrajectoryGLS
         degree=cfg.poly_degree,
         include_bias=False,
     )
+    weak_kwargs = {}
+    if cfg.K is not None:
+        weak_kwargs["K"] = cfg.K
+    if cfg.H_xt is not None:
+        weak_kwargs["H_xt"] = cfg.H_xt
+    if cfg.p is not None:
+        weak_kwargs["p"] = cfg.p
+
     return WeakPDELibrary(
         function_library=poly_lib,
         spatiotemporal_grid=batch.metadata["t_grid"],
+        **weak_kwargs,
     )
 
 
@@ -272,10 +287,16 @@ def _lorenz_make_weak_library(
         degree=cfg.poly_degree,
         include_bias=False,
     )
-    common_kwargs = dict(
-        function_library=poly_lib,
-        spatiotemporal_grid=batch.metadata["t_grid"],
-    )
+    common_kwargs = {
+        "function_library": poly_lib,
+        "spatiotemporal_grid": batch.metadata["t_grid"],
+    }
+    if cfg.K is not None:
+        common_kwargs["K"] = cfg.K
+    if cfg.H_xt is not None:
+        common_kwargs["H_xt"] = cfg.H_xt
+    if cfg.p is not None:
+        common_kwargs["p"] = cfg.p
     if variance_field is None:
         return WeakPDELibrary(**common_kwargs)
     return WeightedWeakPDELibrary(spatiotemporal_weights=variance_field, **common_kwargs)
@@ -341,6 +362,49 @@ def run_lorenz_multi_trajectory_gls_experiment(
         progress_desc="Monte Carlo Lorenz MF",
     )
 
+
+def fit_lorenz_multi_trajectory_rollout_models(
+    cfg: LorenzMultiTrajectoryGLSConfig,
+    *,
+    hf_trajectories: list[np.ndarray],
+    lf_trajectories: list[np.ndarray],
+    t_grid: np.ndarray,
+    weak_seed: int | None = None,
+) -> dict[str, Any]:
+    """Fit HF/LF/MF/MF_w Lorenz models and wrap them for rollout validation."""
+
+    if not hf_trajectories and not lf_trajectories:
+        raise ValueError("At least one HF or LF trajectory is required.")
+
+    state_std = _lorenz_reference_state_std(cfg)
+    noise_hf_abs = cfg.noise_hf_rel * state_std
+    noise_lf_abs = cfg.noise_lf_rel * state_std
+    batch = MultiTrajectoryGLSData(
+        hf=hf_trajectories,
+        lf=lf_trajectories,
+        t_argument=cfg.dt,
+        metadata={
+            "t_grid": np.asarray(t_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+    coef_map = _lorenz_fit_multi_trajectory_weak_gls_models(
+        batch,
+        cfg,
+        cfg.make_optimizer,
+        t_argument=cfg.dt,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
+    reference_trajectory = hf_trajectories[0] if hf_trajectories else lf_trajectories[0]
+    return build_polynomial_rollout_models(
+        coef_map,
+        poly_degree=cfg.poly_degree,
+        reference_trajectory=reference_trajectory,
+        state_names=LORENZ_STATE_NAMES,
+        include_bias=False,
+    )
+
 # ---------------------------------------------------------------------------
 # Lorenz heteroscedastic GLS experiment (weak / weighted-weak SINDy)
 # ---------------------------------------------------------------------------
@@ -360,7 +424,7 @@ class LorenzIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # weak-library settings
     poly_degree: int = 2
     derivative_order: int = 1
-    H_xt: float = 0.01
+    H_xt: float = 0.005
     K: int = int(5 * (t1-t0) / H_xt)          # can be set as int(5 * (t1-t0) / H_xt)
     p: int = 2
     include_bias: bool = False

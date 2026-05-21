@@ -27,9 +27,11 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
+    WeakValidationBlock,
     coefficient_errors,
     fit_multi_trajectory_weak_gls_models,
     fit_intra_trajectory_gls_models,
+    get_library_feature_names,
     run_intra_trajectory_gls_experiment,
     run_monte_carlo_experiment,
     run_multi_trajectory_gls_experiment,
@@ -61,7 +63,7 @@ class BurgersConfig(MonteCarloConfig, EnsembleConfigMixin):
     # Weak-library settings
     poly_degree: int = 1
     derivative_order: int = 2
-    H_xt: float | None = None  # test-function support; None → library default
+    H_xt: list[float] | None = None  # per-dimension test-function support
     K: int = 100               # number of weak test functions
     include_bias: bool = True
 
@@ -80,14 +82,14 @@ class BurgersMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # spatial / temporal discretization
     L: float = 8.0
     NX: int = 256
-    dt: float = 1e-2
-    T_train: float = 10.0
+    dt: float = 1e-3
+    T_train: float = 0.1
     nu: float = 0.1
 
     # multi-fidelity settings (numbers of trajectories)
-    n_lf: int = 100
-    n_hf: int = 10
-    H_xt: float | None = None
+    n_lf: int = 10
+    n_hf: int = 1
+    H_xt: list[float] | None = None
     K: int = 100
 
     # relative noise levels (wrt state std)
@@ -101,7 +103,7 @@ class BurgersMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     include_bias: bool = True
 
     stlsq_threshold: float = 0.05
-    n_ensemble_models: int = 200
+    n_ensemble_models: int = 20
 
     # random seeds
     seed_base: int = 231
@@ -196,6 +198,32 @@ def build_true_burgers_coefficients(nu: float) -> np.ndarray:
     return C_true
 
 
+def _canonicalize_burgers_trajectory(
+    data: np.ndarray,
+    t_grid: np.ndarray,
+    *,
+    variance: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Return Burgers fields in canonical ``(n_x, n_t, 1)`` order."""
+
+    data = np.asarray(data, dtype=float)
+    t_grid = np.asarray(t_grid, dtype=float)
+    if data.ndim != 3 or data.shape[-1] != 1:
+        raise ValueError("data must have shape (n_x, n_t, 1) or (n_t, n_x, 1).")
+
+    aligned_variance = None if variance is None else np.asarray(variance, dtype=float)
+    if data.shape[1] == t_grid.shape[0]:
+        U = data
+    elif data.shape[0] == t_grid.shape[0]:
+        U = np.swapaxes(data, 0, 1)
+        if aligned_variance is not None:
+            aligned_variance = aligned_variance.T
+    else:
+        raise ValueError("Could not align data with t_grid along the time axis.")
+
+    return U, aligned_variance
+
+
 
 # ---------------------------------------------------------------------------
 # Single Monte Carlo run (heteroscedastic GLS experiment)
@@ -212,12 +240,12 @@ def _build_burgers_gls_artifacts(
 
     # 1) Random initial condition and clean trajectory
     u0 = random_initial_condition(rng, cfg)
-    U_clean = burgers_solver(u0, cfg).T      # (NT, NX) → transpose
-    U = U_clean[:, :, None]                  # (NT, NX, 1) for PySINDy
+    U_clean = burgers_solver(u0, cfg).T      # (NX, NT)
+    U = U_clean[:, :, None]                  # (NX, NT, 1) for PySINDy
 
     # 2) Heteroscedastic noise based on |u_x|
     Ux = (np.roll(U, -1, axis=0) - np.roll(U, 1, axis=0)) / (2.0 * dx)
-    grad_mag = np.abs(Ux[:, :, 0])           # (NT, NX)
+    grad_mag = np.abs(Ux[:, :, 0])           # (NX, NT)
 
     alpha = cfg.noise_level
     variance = (alpha * grad_mag) ** 2
@@ -332,7 +360,7 @@ def generate_burgers_dataset(
 
     Returns
     -------
-    X_list : list of arrays (Nt, Nx, 1)
+    X_list : list of arrays (Nx, Nt, 1)
         Noisy trajectories.
     t      : (Nt,) time grid (shared).
     x      : (Nx,) spatial grid (shared).
@@ -345,12 +373,12 @@ def generate_burgers_dataset(
     X_list = []
     for _ in range(n_traj):
         u0 = random_initial_condition(rng, cfg_tmp)
-        U_clean = burgers_solver(u0, cfg_tmp).T      # (Nt, Nx)
-        U = U_clean                                  # (Nt, Nx)
+        U_clean = burgers_solver(u0, cfg_tmp).T      # (Nx, Nt)
+        U = U_clean                                  # (Nx, Nt)
 
         noise = noise_level * rng.standard_normal(size=U.shape)
         U_noisy = U + noise
-        X_list.append(U_noisy[:, :, None])           # (Nt, Nx, 1)
+        X_list.append(U_noisy[:, :, None])           # (Nx, Nt, 1)
 
     return X_list, t, x, nu
 
@@ -521,6 +549,200 @@ def run_burgers_multi_trajectory_gls_experiment(
         fit_models_fn=_burgers_fit_multi_trajectory_weak_gls_models,
         progress_desc="Monte Carlo Burgers MF",
     )
+
+
+def build_burgers_intra_trajectory_artifacts(
+    data: np.ndarray,
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    *,
+    variance: np.ndarray,
+    cfg: BurgersConfig,
+    weak_seed: int | None = None,
+) -> IntraTrajectoryGLSData:
+    """Construct Burgers weak-form artifacts for a provided trajectory."""
+
+    data = np.asarray(data, dtype=float)
+    variance = np.asarray(variance, dtype=float)
+    x_grid = np.asarray(x_grid, dtype=float)
+    t_grid = np.asarray(t_grid, dtype=float)
+
+    U, variance = _canonicalize_burgers_trajectory(data, t_grid, variance=variance)
+
+    if variance.shape != U.shape[:-1]:
+        raise ValueError(f"variance must match data[..., 0] shape {U.shape[:-1]}, got {variance.shape}.")
+
+    X, T = np.meshgrid(x_grid, t_grid)
+    XT = np.asarray([X, T]).T
+    base_library = ps.PolynomialLibrary(
+        degree=cfg.poly_degree,
+        include_bias=False,
+    )
+    tf_seed = cfg.seed_base if weak_seed is None else int(weak_seed)
+
+    common_kwargs = dict(
+        function_library=base_library,
+        derivative_order=cfg.derivative_order,
+        spatiotemporal_grid=XT,
+        is_uniform=True,
+        K=cfg.K,
+        H_xt=cfg.H_xt,
+        include_bias=cfg.include_bias,
+    )
+
+    np.random.seed(tf_seed)
+    weak_lib = WeakPDELibrary(**common_kwargs)
+
+    variance_scaled = variance / np.mean(variance)
+    np.random.seed(tf_seed)
+    weighted_weak_lib_var = WeightedWeakPDELibrary(
+        spatiotemporal_weights=variance_scaled,
+        **common_kwargs,
+    )
+
+    np.random.seed(tf_seed)
+    weighted_weak_lib_ones = WeightedWeakPDELibrary(
+        spatiotemporal_weights=np.ones_like(variance_scaled),
+        **common_kwargs,
+    )
+
+    return IntraTrajectoryGLSData(
+        data=U,
+        t_argument=t_grid,
+        libraries={
+            "No weighting": weak_lib,
+            "Variance GLS": weighted_weak_lib_var,
+            "Ones GLS": weighted_weak_lib_ones,
+        },
+        true_coefficients=build_true_burgers_coefficients(cfg.nu),
+    )
+
+
+def fit_burgers_multi_trajectory_coefficients(
+    cfg: BurgersMultiTrajectoryGLSConfig,
+    *,
+    hf_trajectories: list[np.ndarray],
+    lf_trajectories: list[np.ndarray],
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    noise_hf_abs: float,
+    noise_lf_abs: float,
+    weak_seed: int | None = None,
+) -> dict[str, np.ndarray]:
+    """Fit HF/LF/MF/MF_w Burgers coefficient maps on arbitrary trajectory sets."""
+
+    batch = MultiTrajectoryGLSData(
+        hf=hf_trajectories,
+        lf=lf_trajectories,
+        t_argument=cfg.dt,
+        metadata={
+            "t": np.asarray(t_grid, dtype=float),
+            "x": np.asarray(x_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+    return _burgers_fit_multi_trajectory_weak_gls_models(
+        batch,
+        cfg,
+        cfg.make_optimizer,
+        t_argument=cfg.dt,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
+
+
+def build_burgers_weak_validation_blocks(
+    cfg: BurgersMultiTrajectoryGLSConfig | BurgersConfig,
+    trajectories: list[np.ndarray],
+    *,
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    weak_seed: int | None = None,
+    group_name: str = "validation",
+) -> list[WeakValidationBlock]:
+    """Build held-out weak-form blocks for Burgers trajectories."""
+
+    dummy_cfg = BurgersMultiTrajectoryGLSConfig(
+        L=cfg.L,
+        NX=cfg.NX,
+        dt=cfg.dt,
+        T_train=float(np.asarray(t_grid, dtype=float)[-1] - np.asarray(t_grid, dtype=float)[0]),
+        nu=cfg.nu,
+        H_xt=cfg.H_xt,
+        K=cfg.K,
+        derivative_order=cfg.derivative_order,
+        include_bias=cfg.include_bias,
+        poly_degree=cfg.poly_degree,
+        stlsq_threshold=cfg.stlsq_threshold,
+        n_ensemble_models=cfg.n_ensemble_models,
+        seed_base=cfg.seed_base,
+    )
+    batch = MultiTrajectoryGLSData(
+        hf=[],
+        lf=[],
+        t_argument=cfg.dt,
+        metadata={
+            "t": np.asarray(t_grid, dtype=float),
+            "x": np.asarray(x_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+
+    blocks: list[WeakValidationBlock] = []
+    for traj_idx, trajectory in enumerate(trajectories):
+        trajectory, _ = _canonicalize_burgers_trajectory(trajectory, t_grid)
+        library = _burgers_make_weak_library(batch, dummy_cfg, variance_field=None)
+        theta = np.asarray(library.fit_transform([trajectory])[0])
+        rhs = np.asarray(library.convert_u_dot_integral(trajectory))
+        blocks.append(
+            WeakValidationBlock(
+                theta=theta,
+                rhs=rhs,
+                group=group_name,
+                trajectory=traj_idx,
+                block=0,
+            )
+        )
+    return blocks
+
+
+def get_burgers_feature_names(
+    cfg: BurgersMultiTrajectoryGLSConfig | BurgersConfig,
+    *,
+    t_grid: np.ndarray,
+    x_grid: np.ndarray,
+    reference_trajectory: np.ndarray,
+) -> tuple[str, ...]:
+    """Return readable Burgers weak-library feature names."""
+
+    dummy_cfg = BurgersMultiTrajectoryGLSConfig(
+        L=cfg.L,
+        NX=cfg.NX,
+        dt=cfg.dt,
+        T_train=float(np.asarray(t_grid, dtype=float)[-1] - np.asarray(t_grid, dtype=float)[0]),
+        nu=cfg.nu,
+        H_xt=cfg.H_xt,
+        K=cfg.K,
+        derivative_order=cfg.derivative_order,
+        include_bias=cfg.include_bias,
+        poly_degree=cfg.poly_degree,
+        stlsq_threshold=cfg.stlsq_threshold,
+        n_ensemble_models=cfg.n_ensemble_models,
+        seed_base=cfg.seed_base,
+    )
+    batch = MultiTrajectoryGLSData(
+        hf=[],
+        lf=[],
+        t_argument=cfg.dt,
+        metadata={
+            "t": np.asarray(t_grid, dtype=float),
+            "x": np.asarray(x_grid, dtype=float),
+            "weak_seed": cfg.seed_base,
+        },
+    )
+    library = _burgers_make_weak_library(batch, dummy_cfg, variance_field=None)
+    reference_trajectory, _ = _canonicalize_burgers_trajectory(reference_trajectory, t_grid)
+    return get_library_feature_names(library, reference_trajectory, input_features=("u",))
 
 # ---------------------------------------------------------------------------
 # Helper: get one set of GLS coefficients for animation / forecasting

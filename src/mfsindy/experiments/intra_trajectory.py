@@ -26,6 +26,22 @@ class IntraTrajectoryGLSData:
     true_coefficients: np.ndarray
 
 
+def fit_intra_trajectory_gls_model_objects(
+    cfg: EnsembleConfigMixin,
+    artifacts: IntraTrajectoryGLSData,
+    methods: List[str],
+) -> Dict[str, ps.SINDy]:
+    """Fit GLS models for each weighting strategy and return the model objects."""
+
+    models: Dict[str, ps.SINDy] = {}
+    for method in methods:
+        library = artifacts.libraries[method]
+        model = ps.SINDy(feature_library=library, optimizer=cfg.make_optimizer())
+        model.fit(artifacts.data, t=artifacts.t_argument)
+        models[method] = model
+    return models
+
+
 def fit_intra_trajectory_gls_models(
     cfg: EnsembleConfigMixin,
     artifacts: IntraTrajectoryGLSData,
@@ -36,10 +52,8 @@ def fit_intra_trajectory_gls_models(
     """Fit GLS models for each weighting strategy."""
 
     coefs: Dict[str, np.ndarray] = {}
-    for method in methods:
-        library = artifacts.libraries[method]
-        model = ps.SINDy(feature_library=library, optimizer=cfg.make_optimizer())
-        model.fit(artifacts.data, t=artifacts.t_argument)
+    models = fit_intra_trajectory_gls_model_objects(cfg, artifacts, methods)
+    for method, model in models.items():
         coef = np.asarray(model.optimizer.coef_)
         if coef_postprocess is not None:
             coef = coef_postprocess(coef, method)
@@ -105,6 +119,7 @@ def run_intra_trajectory_gls_experiment(
 
 __all__ = [
     "IntraTrajectoryGLSData",
+    "fit_intra_trajectory_gls_model_objects",
     "fit_intra_trajectory_gls_models",
     "run_intra_trajectory_gls_experiment",
 ]
