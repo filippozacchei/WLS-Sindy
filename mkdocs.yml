@@ -1,9 +1,6 @@
 site_name: MF-SINDy Docs
 site_url: https://filippozacchei.github.io/MFSindy/
-repo_url: https://github.com/filippozacchei/MFSindy
-exclude_docs: |
-  notebooks/forecastingDoublePendulum.ipynb
-  notebooks/forecastingMF.ipynb
+repo_url: https://github.com/filippozacchei/MFSindy/
 
 theme:
   name: material
