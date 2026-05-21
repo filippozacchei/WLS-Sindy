@@ -29,7 +29,7 @@ The package exposes reusable case modules (`mfsindy.cases.*`), plotting helpers,
 
 ## Documentation & Research Assets
 
-- [Hosted documentation](https://filippozacchei.github.io/2025_visiting/) (MkDocs Material) mirrors the Markdown under `docs/`. Use `mkdocs serve` for local previews; `.github/workflows/docs.yml` guards the build, while `.github/workflows/mkdocs-deploy.yml` publishes to GitHub Pages.
+- [Hosted documentation](https://filippozacchei.github.io/MFSindy/) (MkDocs Material) mirrors the Markdown under `docs/`. Use `mkdocs serve` for local previews; `.github/workflows/docs.yml` guards the build, while `.github/workflows/mkdocs-deploy.yml` publishes to GitHub Pages.
 - `scripts/` contains lightweight project utilities.
 - `paper_results_section.tex` is a standalone LaTeX draft of the results section that can be dropped into the manuscript source tree.
 
