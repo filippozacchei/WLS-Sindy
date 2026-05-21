@@ -1,6 +1,6 @@
-# WLS-SINDy
+# MF-SINDy
 
-Weighted Least Squares Sparse Identification of Nonlinear Dynamics (WLS-SINDy) extends the weak-form SINDy framework with heteroscedastic noise models, multi-fidelity training data, and GLS-style whitening. This repository houses the research code, documentation, and a standalone paper-results draft.
+Multi Fidelity Sparse Identification of Nonlinear Dynamics (WLS-SINDy) extends the weak-form SINDy framework with heteroscedastic noise models, multi-fidelity training data, and GLS-style whitening. This repository houses the research code, documentation, and a standalone paper-results draft.
 
 The project follows the US-RSE recommendations for research software: a `src/` package installable with `pip`, reproducible experiments in `examples/`, versioned documentation, and automated quality gates via pre-commit + nox.
 
