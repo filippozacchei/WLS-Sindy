@@ -13,17 +13,13 @@ MF–SINDy augments weak-form + ensemble SINDy with explicit fidelity modelling.
 ## Regime I – trajectory-wise homogeneous noise
 
 Each trajectory $k$ has variance $\sigma_k^2$. The weak covariance is block diagonal with blocks $\sigma_k^2 \Sigma_0$ ($\Sigma_0 = V'(V')^\top$), leading to a simple block whitening matrix
-$$
-W=\mathrm{diag}\left(\sigma_k^{-1}\Sigma_0^{-1/2}\right).
-$$
+$$W=\mathrm{diag}\left(\sigma_k^{-1}\Sigma_0^{-1/2}\right).$$
 Embedding this inside sequential thresholded least squares yields trajectory-weighted refits where low-noise trajectories dominate support selection.
 
 ## Regime II – trajectory-wise heterogeneous noise
 
 Variance varies over time within each trajectory, so the weak covariance becomes
-$$
-\Sigma = V' D_\sigma (V')^\top,
-$$
+$$\Sigma = V' D_\sigma (V')^\top,$$
 which is generally dense because test-function supports overlap. Whitening uses any $W$ with $W^\top W = \Sigma^{-1}$ (e.g., Cholesky factors). For multiple trajectories, each block uses its own diagonal variance profile $D_{\sigma^{(k)}}$.
 
 ## Variance estimation
