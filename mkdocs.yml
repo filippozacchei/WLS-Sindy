@@ -49,6 +49,7 @@ nav:
       - Isothermal Flow Part 2: notebooks/isothermal_flow/part2.ipynb
       - Pendulum Part 1: notebooks/pendulum/part1.ipynb
       - Pendulum Part 2: notebooks/pendulum/part2.ipynb
+      - Double Pendulum Forecasting: notebooks/double_pendulum/forecasting.ipynb
   - Contributing: contributing.md
   - API Reference: api.md
   - Methodology: methodology.md
