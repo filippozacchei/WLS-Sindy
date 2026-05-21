@@ -1,6 +1,6 @@
 # Examples & Notebooks
 
-Every case lives in `examples/<case>/` with notebook entry points for the multi-trajectory and heteroscedastic workflows. The table below lists the canonical entry points currently present in the repo.
+The standard identification case studies live in `examples/<case>/` with notebook entry points for the multi-trajectory and heteroscedastic workflows. The table below lists the canonical part-based entry points currently present in the repo.
 
 | Case | Part 1 (multi-trajectory GLS) | Part 2 (heteroscedastic GLS) |
 | --- | --- | --- |
@@ -11,11 +11,13 @@ Every case lives in `examples/<case>/` with notebook entry points for the multi-
 | Pendulum | `examples/pendulum/part1.ipynb` | `examples/pendulum/part2.ipynb` |
 | Isothermal flow | `examples/isothermal_flow/part1.ipynb` | `examples/isothermal_flow/part2.ipynb` |
 
-Each notebook follows the same storyline:
+Each standard notebook follows the same storyline:
 
 1. Introduce the governing equations and reference trajectories.
-2. Fit HF/LF/MF/MF\_w ensemble models via the shared experiment utilities.
+2. Fit the fidelity models used by that case via the shared experiment utilities.
 3. Visualise coefficient MAE/support errors with `mfsindy.plots.bubble_hist`.
+
+The repo may also include standalone notebooks outside the part-based template when a case is forecast-centric rather than coefficient-centric. The double-pendulum sensor-fusion example lives at `examples/double_pendulum/forecasting.ipynb`. That notebook uses a shared-trajectory HF/LF setup, compares `HF`, `LF`, and `MF`, exposes a `LIBRARY_KIND` flag for polynomial versus physics-informed libraries, and ends with a multi-seed summary based on forecast and derivative metrics.
 
 > **Tip:** keep large outputs under `examples/<case>/results/`; those folders are git-ignored so repeated runs stay clean.
 
@@ -31,3 +33,7 @@ Use the links below to launch the notebooks in a live Binder session.
 | Hopf | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/main?urlpath=lab/tree/examples/hopf/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/main?urlpath=lab/tree/examples/hopf/part2.ipynb) |
 | Pendulum | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/main?urlpath=lab/tree/examples/pendulum/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/main?urlpath=lab/tree/examples/pendulum/part2.ipynb) |
 | Isothermal flow | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/main?urlpath=lab/tree/examples/isothermal_flow/part1.ipynb) | [Open in Binder](https://mybinder.org/v2/gh/filippozacchei/WLS-Sindy/main?urlpath=lab/tree/examples/isothermal_flow/part2.ipynb) |
+
+## Standalone Forecasting Case
+
+- Double pendulum forecasting: `examples/double_pendulum/forecasting.ipynb`

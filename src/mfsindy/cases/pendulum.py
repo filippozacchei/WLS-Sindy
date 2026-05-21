@@ -25,6 +25,7 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
+    build_polynomial_rollout_models,
     coefficient_errors,
     fit_multi_trajectory_weak_gls_models,
     run_intra_trajectory_gls_experiment,
@@ -32,6 +33,8 @@ from mfsindy.experiments import (
     run_multi_trajectory_gls_experiment,
 )
 from mfsindy.weighted_weak_pde_library import WeightedWeakPDELibrary
+
+PENDULUM_STATE_NAMES = ("theta", "omega")
 
 # ---------------------------------------------------------------------------
 # Core single-pendulum dynamics + trajectories
@@ -235,6 +238,9 @@ class PendulumMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
 
     # SINDy settings
     poly_degree: int = 1
+    H_xt: float | None = None
+    K: int | None = None
+    p: int | None = None
     stlsq_threshold: float = 0.1
     n_ensemble_models: int = 100
 
@@ -298,9 +304,18 @@ def _pendulum_library(batch: MultiTrajectoryGLSData, cfg: PendulumMultiTrajector
         degree=cfg.poly_degree,
         include_bias=False,
     )
+    weak_kwargs = {}
+    if cfg.K is not None:
+        weak_kwargs["K"] = cfg.K
+    if cfg.H_xt is not None:
+        weak_kwargs["H_xt"] = cfg.H_xt
+    if cfg.p is not None:
+        weak_kwargs["p"] = cfg.p
+
     return WeakPDELibrary(
         function_library=base_library,
         spatiotemporal_grid=batch.metadata["t_grid"],
+        **weak_kwargs,
     )
 
 
@@ -319,10 +334,16 @@ def _pendulum_make_weak_library(
         degree=cfg.poly_degree,
         include_bias=False,
     )
-    common_kwargs = dict(
-        function_library=base_library,
-        spatiotemporal_grid=batch.metadata["t_grid"],
-    )
+    common_kwargs = {
+        "function_library": base_library,
+        "spatiotemporal_grid": batch.metadata["t_grid"],
+    }
+    if cfg.K is not None:
+        common_kwargs["K"] = cfg.K
+    if cfg.H_xt is not None:
+        common_kwargs["H_xt"] = cfg.H_xt
+    if cfg.p is not None:
+        common_kwargs["p"] = cfg.p
     if variance_field is None:
         return WeakPDELibrary(**common_kwargs)
     return WeightedWeakPDELibrary(spatiotemporal_weights=variance_field, **common_kwargs)
@@ -389,6 +410,49 @@ def run_pendulum_multi_trajectory_gls_experiment(
     )
 
 
+def fit_pendulum_multi_trajectory_rollout_models(
+    cfg: PendulumMultiTrajectoryGLSConfig,
+    *,
+    hf_trajectories: list[np.ndarray],
+    lf_trajectories: list[np.ndarray],
+    t_grid: np.ndarray,
+    weak_seed: int | None = None,
+) -> dict[str, Any]:
+    """Fit HF/LF/MF/MF_w pendulum models and wrap them for rollout validation."""
+
+    if not hf_trajectories and not lf_trajectories:
+        raise ValueError("At least one HF or LF trajectory is required.")
+
+    state_std = _pendulum_reference_state_std(cfg)
+    noise_hf_abs = cfg.noise_hf_rel * state_std
+    noise_lf_abs = cfg.noise_lf_rel * state_std
+    batch = MultiTrajectoryGLSData(
+        hf=hf_trajectories,
+        lf=lf_trajectories,
+        t_argument=cfg.dt,
+        metadata={
+            "t_grid": np.asarray(t_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+    coef_map = _pendulum_fit_multi_trajectory_weak_gls_models(
+        batch,
+        cfg,
+        cfg.make_optimizer,
+        t_argument=cfg.dt,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
+    reference_trajectory = hf_trajectories[0] if hf_trajectories else lf_trajectories[0]
+    return build_polynomial_rollout_models(
+        coef_map,
+        poly_degree=cfg.poly_degree,
+        reference_trajectory=reference_trajectory,
+        state_names=PENDULUM_STATE_NAMES,
+        include_bias=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pendulum heteroscedastic GLS experiment (weak / weighted-weak SINDy)
 # ---------------------------------------------------------------------------
@@ -404,7 +468,7 @@ class PendulumIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # physical parameters
     g: float = 9.81
     L: float = 1.0
-    c: float = 0.1
+    c: float = 0.5
 
     # heteroscedastic noise model: sigma(t) = sigma0 + alpha * |omega(t)|
     sigma0: float = 0.0
@@ -414,7 +478,7 @@ class PendulumIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     poly_degree: int = 1
     derivative_order: int = 1
     H_xt: float = 0.1
-    K: int = 500
+    K: int = 100
     p: int = 2
     include_bias: bool = False
 

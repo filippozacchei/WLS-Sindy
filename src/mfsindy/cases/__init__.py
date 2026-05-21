@@ -4,6 +4,7 @@ from importlib import import_module
 
 __all__ = [
     "burgers",
+    "double_pendulum_forecasting",
     "hopf",
     "isothermal_flow",
     "lorenz",

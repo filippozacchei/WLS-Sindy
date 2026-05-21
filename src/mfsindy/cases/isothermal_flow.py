@@ -13,9 +13,11 @@ Includes:
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
-from typing import Dict, Tuple, List, Callable
+from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -29,12 +31,16 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
-    coefficient_errors,
+    WeakValidationBlock,
+    get_library_feature_names,
     run_intra_trajectory_gls_experiment,
-    run_monte_carlo_experiment,
     run_multi_trajectory_gls_experiment,
 )
 from mfsindy.weighted_weak_pde_library import WeightedWeakPDELibrary
+
+
+_NS_PART1_TUNED_HYPERPARAMS_FILENAME = "navierstokes_part1_tuned_hyperparams.json"
+_NS_PART1_MODELS = ("HF", "LF", "MF", "MF_w")
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +212,23 @@ def generate_isothermal_ns_dataset(
 # ---------------------------------------------------------------------------
 
 def _ddt_centered(f: np.ndarray, dt: float) -> np.ndarray:
-    """Centered finite difference in time with periodic wrap (axis=2)."""
-    return (np.roll(f, -1, axis=2) - np.roll(f, 1, axis=2)) / (2.0 * dt)
+    """Centered finite difference in time (axis=2) with one-sided boundaries."""
+    if f.ndim < 3:
+        raise ValueError("Expected an array with time on axis 2.")
+    if f.shape[2] < 2:
+        raise ValueError("At least two time samples are required.")
+
+    ddt = np.empty_like(f, dtype=float)
+    if f.shape[2] == 2:
+        slope = (f[:, :, 1] - f[:, :, 0]) / dt
+        ddt[:, :, 0] = slope
+        ddt[:, :, 1] = slope
+        return ddt
+
+    ddt[:, :, 1:-1] = (f[:, :, 2:] - f[:, :, :-2]) / (2.0 * dt)
+    ddt[:, :, 0] = (f[:, :, 1] - f[:, :, 0]) / dt
+    ddt[:, :, -1] = (f[:, :, -1] - f[:, :, -2]) / dt
+    return ddt
 
 
 def add_heteroscedastic_noise_temporal_derivative(
@@ -232,12 +253,12 @@ def add_heteroscedastic_noise_temporal_derivative(
 
     u = U_clean[..., 0]
     v = U_clean[..., 1]
+    p = U_clean[..., 2]
 
     u_t = _ddt_centered(u, dt)
     v_t = _ddt_centered(v, dt)
 
-    time_deriv_mag = np.sqrt(u_t ** 2 + v_t ** 2)  # (N, N, Nt)
-
+    time_deriv_mag = np.sqrt(u ** 2 + v ** 2 + 0*p ** 2)  # (N, N, Nt)
     variance = (sigma0 + alpha * time_deriv_mag) ** 2
     variance = np.maximum(variance, 1e-16)
     std = np.sqrt(variance)
@@ -273,6 +294,124 @@ def _build_custom_library():
     return base_library
 
 
+def _ns_multi_h_xt(cfg: "NSIsothermalMultiTrajectoryGLSConfig") -> list[float]:
+    if cfg.H_xt is not None:
+        return list(cfg.H_xt)
+    return [cfg.L / 10.0, cfg.L / 10.0, cfg.T / 10.0]
+
+
+def _ns_intra_h_xt(cfg: "NSIsothermalIntraTrajectoryGLSConfig") -> list[float]:
+    if cfg.H_xt is not None:
+        return list(cfg.H_xt)
+    return [cfg.L / 10.0, cfg.L / 10.0, cfg.T / 40.0]
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _normalize_ns_part1_tuned_hyperparams(
+    params_by_model: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(params_by_model, dict):
+        raise ValueError("Expected a mapping of model names to hyperparameters.")
+
+    missing_models = [
+        model_name for model_name in _NS_PART1_MODELS if model_name not in params_by_model
+    ]
+    if missing_models:
+        missing = ", ".join(missing_models)
+        raise ValueError(f"Missing tuned hyperparameters for: {missing}.")
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for model_name in _NS_PART1_MODELS:
+        params = params_by_model[model_name]
+        if not isinstance(params, dict):
+            raise ValueError(f"Expected a mapping of hyperparameters for {model_name!r}.")
+
+        if "stlsq_threshold" not in params:
+            raise ValueError(f"Missing 'stlsq_threshold' for {model_name!r}.")
+        if "H_xt" not in params:
+            raise ValueError(f"Missing 'H_xt' for {model_name!r}.")
+
+        h_xt = [float(value) for value in params["H_xt"]]
+        if len(h_xt) != 3:
+            raise ValueError(
+                f"Expected 'H_xt' to contain three entries for {model_name!r}, got {len(h_xt)}."
+            )
+
+        normalized[model_name] = {
+            "stlsq_threshold": float(params["stlsq_threshold"]),
+            "H_xt": h_xt,
+        }
+
+    return normalized
+
+
+def _ns_part1_tuned_hyperparams_candidates(
+    *,
+    results_dir: str | os.PathLike[str] | None = None,
+    filename: str = _NS_PART1_TUNED_HYPERPARAMS_FILENAME,
+) -> list[Path]:
+    candidates: list[Path] = []
+    if results_dir is not None:
+        candidates.append(Path(results_dir) / filename)
+
+    repo_root = _repo_root()
+    candidates.extend(
+        [
+            repo_root / "examples" / "isothermal_flow" / "results" / filename,
+            repo_root / "results" / filename,
+        ]
+    )
+
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        key = candidate.resolve(strict=False)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped
+
+
+def load_ns_part1_tuned_hyperparams(
+    *,
+    results_dir: str | os.PathLike[str] | None = None,
+    filename: str = _NS_PART1_TUNED_HYPERPARAMS_FILENAME,
+) -> dict[str, dict[str, Any]] | None:
+    """Load cached Part 1 Navier-Stokes tuning results when available."""
+
+    for path in _ns_part1_tuned_hyperparams_candidates(results_dir=results_dir, filename=filename):
+        if not path.is_file():
+            continue
+        with path.open(encoding="utf-8") as handle:
+            return _normalize_ns_part1_tuned_hyperparams(json.load(handle))
+    return None
+
+
+def save_ns_part1_tuned_hyperparams(
+    params_by_model: dict[str, Any],
+    *,
+    results_dir: str | os.PathLike[str] | None = None,
+    filename: str = _NS_PART1_TUNED_HYPERPARAMS_FILENAME,
+) -> Path:
+    """Persist Part 1 Navier-Stokes tuning results for reuse."""
+
+    normalized = _normalize_ns_part1_tuned_hyperparams(params_by_model)
+    if results_dir is None:
+        target = _repo_root() / "examples" / "isothermal_flow" / "results" / filename
+    else:
+        target = Path(results_dir) / filename
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8") as handle:
+        json.dump(normalized, handle, indent=2)
+        handle.write("\n")
+    return target
+
+
 def compute_reference_coefficients(
     N: int,
     Nt: int,
@@ -285,6 +424,7 @@ def compute_reference_coefficients(
     include_bias: bool,
     p: int,
     K_ref: int,
+    H_xt: list[float] | tuple[float, float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, ps.CustomLibrary]:
     """
     Clean reference model on one trajectory (weak SINDy).
@@ -304,6 +444,8 @@ def compute_reference_coefficients(
 
     base_library = _build_custom_library()
     
+    h_xt = list(H_xt) if H_xt is not None else [L / 10.0, L / 10.0, T / 10.0]
+
     weak_lib_ref = WeightedWeakPDELibrary(
         function_library=_build_custom_library(),  # separate instance is fine
         derivative_order=derivative_order,
@@ -311,7 +453,7 @@ def compute_reference_coefficients(
         K=K_ref,
         p=p,
         spatiotemporal_weights=np.ones((U_clean.shape[0],U_clean.shape[1],U_clean.shape[2])),
-        H_xt=[L / 10.0, L / 10.0, T / 10.0],
+        H_xt=h_xt,
         include_bias=include_bias,
     )
 
@@ -336,15 +478,15 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     """
 
     # multi-fidelity settings
-    n_lf: int = 100
-    n_hf: int = 10
+    n_lf: int = 10
+    n_hf: int = 1
 
     # relative noise levels w.r.t. std(U_clean_ref)
     noise_lf_rel: float = 0.25
     noise_hf_rel: float = 0.01
 
     # grid / time
-    N: int = 64
+    N: int = 32
     Nt: int = 100
     Nt_std: int = 500
     L: float = 5.0
@@ -361,6 +503,7 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     p: int = 2
     K: int = 100
     K_std: int = 100
+    H_xt: list[float] | None = None
 
     # SINDy / optimizer settings
     stlsq_threshold: float = 0.5
@@ -427,7 +570,7 @@ def _ns_library(batch: MultiTrajectoryGLSData, cfg: NSIsothermalMultiTrajectoryG
         is_uniform=True,
         K=cfg.K,
         p=cfg.p,
-        H_xt=[cfg.L / 10.0, cfg.L / 10.0, cfg.T / 10.0],
+        H_xt=_ns_multi_h_xt(cfg),
         include_bias=cfg.include_bias,
     )
 
@@ -447,7 +590,7 @@ def _ns_make_weak_library(
         is_uniform=True,
         K=cfg.K,
         p=cfg.p,
-        H_xt=[cfg.L / 10.0, cfg.L / 10.0, cfg.T / 10.0],
+        H_xt=_ns_multi_h_xt(cfg),
         include_bias=cfg.include_bias,
     )
     if variance_field is None:
@@ -583,6 +726,7 @@ def run_ns_isothermal_multi_trajectory_gls_experiment(
         include_bias=cfg.include_bias,
         p=cfg.p,
         K_ref=cfg.K_std,
+        H_xt=cfg.H_xt,
     )
     
     _, U_ref, t_ref, grid_ref, _ = compute_reference_coefficients(
@@ -597,6 +741,7 @@ def run_ns_isothermal_multi_trajectory_gls_experiment(
         include_bias=cfg.include_bias,
         p=cfg.p,
         K_ref=cfg.K,
+        H_xt=cfg.H_xt,
     )
 
 
@@ -623,6 +768,135 @@ def run_ns_isothermal_multi_trajectory_gls_experiment(
         optimizer_factory=cfg.make_optimizer,
         fit_models_fn=_ns_fit_multi_trajectory_weak_gls_models,
         progress_desc="MC isothermal NS MF",
+    )
+
+
+def fit_ns_isothermal_multi_trajectory_coefficients(
+    cfg: NSIsothermalMultiTrajectoryGLSConfig,
+    *,
+    hf_trajectories: list[np.ndarray],
+    lf_trajectories: list[np.ndarray],
+    t_grid: np.ndarray,
+    grid: np.ndarray,
+    noise_hf_abs: float,
+    noise_lf_abs: float,
+    weak_seed: int | None = None,
+) -> dict[str, np.ndarray]:
+    """Fit HF/LF/MF/MF_w isothermal-flow coefficients on arbitrary trajectory sets."""
+
+    batch = MultiTrajectoryGLSData(
+        hf=hf_trajectories,
+        lf=lf_trajectories,
+        t_argument=np.asarray(t_grid, dtype=float),
+        metadata={
+            "grid": np.asarray(grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+    return _ns_fit_multi_trajectory_weak_gls_models(
+        batch,
+        cfg,
+        cfg.make_optimizer,
+        t_argument=t_grid,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
+
+
+def build_ns_isothermal_weak_validation_blocks(
+    cfg: NSIsothermalMultiTrajectoryGLSConfig | NSIsothermalIntraTrajectoryGLSConfig,
+    trajectories: list[np.ndarray],
+    *,
+    grid: np.ndarray,
+    weak_seed: int | None = None,
+    group_name: str = "validation",
+) -> list[WeakValidationBlock]:
+    """Build held-out weak-form validation blocks for isothermal-flow trajectories."""
+
+    if isinstance(cfg, NSIsothermalMultiTrajectoryGLSConfig):
+        multi_cfg = cfg
+    else:
+        multi_cfg = NSIsothermalMultiTrajectoryGLSConfig(
+            n_lf=1,
+            n_hf=1,
+            noise_lf_rel=0.0,
+            noise_hf_rel=0.0,
+            N=cfg.N,
+            Nt=cfg.Nt,
+            Nt_std=cfg.Nt,
+            L=cfg.L,
+            T=cfg.T,
+            T_std=cfg.T,
+            mu=cfg.mu,
+            RT=cfg.RT,
+            derivative_order=cfg.derivative_order,
+            include_bias=cfg.include_bias,
+            p=cfg.p,
+            K=cfg.K,
+            K_std=cfg.K_ref,
+            H_xt=cfg.H_xt,
+            stlsq_threshold=cfg.stlsq_threshold,
+            stlsq_alpha=cfg.stlsq_alpha,
+            n_ensemble_models=cfg.n_ensemble_models,
+            seed_base=cfg.seed_base,
+        )
+
+    grid = np.asarray(grid, dtype=float)
+    weak_seed = multi_cfg.seed_base if weak_seed is None else int(weak_seed)
+    blocks: list[WeakValidationBlock] = []
+    for traj_idx, trajectory in enumerate(trajectories):
+        theta, rhs = _ns_build_weak_block(
+            trajectory,
+            multi_cfg,
+            grid=grid,
+            variance_field=None,
+            weak_seed=weak_seed,
+        )
+        blocks.append(
+            WeakValidationBlock(
+                theta=theta,
+                rhs=rhs,
+                group=group_name,
+                trajectory=traj_idx,
+                block=0,
+            )
+        )
+    return blocks
+
+
+def get_ns_isothermal_feature_names(
+    cfg: NSIsothermalMultiTrajectoryGLSConfig | NSIsothermalIntraTrajectoryGLSConfig,
+    *,
+    grid: np.ndarray,
+    reference_trajectory: np.ndarray,
+) -> tuple[str, ...]:
+    """Return readable weak-library feature names for isothermal-flow models."""
+
+    if isinstance(cfg, NSIsothermalMultiTrajectoryGLSConfig):
+        multi_cfg = cfg
+        library = _ns_make_weak_library(
+            multi_cfg,
+            np.asarray(grid, dtype=float),
+            variance_field=None,
+            weak_seed=multi_cfg.seed_base,
+        )
+    else:
+        h_xt = _ns_intra_h_xt(cfg)
+        library = WeakPDELibrary(
+            function_library=_build_custom_library(),
+            derivative_order=cfg.derivative_order,
+            spatiotemporal_grid=np.asarray(grid, dtype=float),
+            is_uniform=True,
+            K=cfg.K,
+            p=cfg.p,
+            H_xt=h_xt,
+            include_bias=cfg.include_bias,
+        )
+
+    return get_library_feature_names(
+        library,
+        reference_trajectory,
+        input_features=("u", "v", "rho"),
     )
 
 
@@ -657,6 +931,7 @@ class NSIsothermalIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     p: int = 2
     K_ref: int = 1000
     K: int = 1000
+    H_xt: list[float] | None = None
 
     # SINDy / optimizer settings
     stlsq_threshold: float = 0.5
@@ -694,7 +969,7 @@ def _build_ns_gls_artifacts(
 
     variance_scaled = variance / np.mean(variance)
     tf_seed = cfg.seed_base + 1000 + run_idx
-    h_xt = [cfg.L / 10.0, cfg.L / 10.0, cfg.T / 40.0]
+    h_xt = _ns_intra_h_xt(cfg)
 
     np.random.seed(tf_seed)
     weak_lib = WeakPDELibrary(
@@ -766,6 +1041,7 @@ def run_ns_isothermal_intra_trajectory_gls_experiment(
         include_bias=cfg.include_bias,
         p=cfg.p,
         K_ref=cfg.K_ref,
+        H_xt=cfg.H_xt,
     )
 
     def builder(run_idx: int, cfg: NSIsothermalIntraTrajectoryGLSConfig) -> IntraTrajectoryGLSData:
@@ -783,4 +1059,82 @@ def run_ns_isothermal_intra_trajectory_gls_experiment(
         cfg,
         run_builder=builder,
         progress_desc="MC isothermal NS GLS",
+    )
+
+
+def build_ns_isothermal_intra_trajectory_artifacts(
+    data: np.ndarray,
+    t_grid: np.ndarray,
+    grid: np.ndarray,
+    *,
+    variance: np.ndarray,
+    cfg: NSIsothermalIntraTrajectoryGLSConfig,
+    base_library: ps.CustomLibrary | None = None,
+    true_coefficients: np.ndarray | None = None,
+    weak_seed: int | None = None,
+) -> IntraTrajectoryGLSData:
+    """Construct isothermal-flow weak-form artifacts for a provided trajectory."""
+
+    data = np.asarray(data, dtype=float)
+    t_grid = np.asarray(t_grid, dtype=float)
+    grid = np.asarray(grid, dtype=float)
+    variance = np.asarray(variance, dtype=float)
+    if data.ndim != 4 or data.shape[-1] != 3:
+        raise ValueError("data must have shape (N, N, Nt, 3).")
+    if variance.shape != data.shape[:-1]:
+        raise ValueError(f"variance must have shape {data.shape[:-1]}, got {variance.shape}.")
+
+    base_library = _build_custom_library() if base_library is None else base_library
+    variance_scaled = variance / np.mean(variance)
+    tf_seed = cfg.seed_base if weak_seed is None else int(weak_seed)
+    h_xt = _ns_intra_h_xt(cfg)
+
+    np.random.seed(tf_seed)
+    weak_lib = WeakPDELibrary(
+        function_library=base_library,
+        derivative_order=cfg.derivative_order,
+        spatiotemporal_grid=grid,
+        is_uniform=True,
+        K=cfg.K,
+        p=cfg.p,
+        H_xt=h_xt,
+        include_bias=cfg.include_bias,
+    )
+
+    np.random.seed(tf_seed)
+    weighted_weak_lib_var = WeightedWeakPDELibrary(
+        function_library=base_library,
+        derivative_order=cfg.derivative_order,
+        spatiotemporal_grid=grid,
+        spatiotemporal_weights=variance_scaled,
+        is_uniform=True,
+        K=cfg.K,
+        p=cfg.p,
+        H_xt=h_xt,
+        include_bias=cfg.include_bias,
+    )
+
+    np.random.seed(tf_seed)
+    weighted_weak_lib_ones = WeightedWeakPDELibrary(
+        function_library=base_library,
+        derivative_order=cfg.derivative_order,
+        spatiotemporal_grid=grid,
+        spatiotemporal_weights=np.ones_like(variance_scaled),
+        is_uniform=True,
+        K=cfg.K,
+        p=cfg.p,
+        H_xt=h_xt,
+        include_bias=cfg.include_bias,
+    )
+
+    return IntraTrajectoryGLSData(
+        data=data,
+        t_argument=t_grid,
+        libraries={
+            "No weighting": weak_lib,
+            "Variance GLS": weighted_weak_lib_var,
+            "Ones GLS": weighted_weak_lib_ones,
+        },
+        true_coefficients=
+        np.empty((data.shape[-1], 0)) if true_coefficients is None else np.asarray(true_coefficients),
     )

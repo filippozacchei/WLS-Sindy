@@ -19,6 +19,7 @@ from mfsindy.experiments import (
     IntraTrajectoryGLSData,
     MonteCarloConfig,
     MultiTrajectoryGLSData,
+    build_polynomial_rollout_models,
     fit_multi_trajectory_weak_gls_models,
     run_intra_trajectory_gls_experiment,
     run_multi_trajectory_gls_experiment,
@@ -26,6 +27,8 @@ from mfsindy.experiments import (
 from mfsindy.weighted_weak_pde_library import WeightedWeakPDELibrary
 
 from scipy.integrate import solve_ivp  # at top of file if not already imported
+
+HOPF_STATE_NAMES = ("x", "y")
 
 
 
@@ -185,6 +188,9 @@ class HopfMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
 
     # SINDy settings
     poly_degree: int = 3
+    H_xt: float | None = None
+    K: int | None = None
+    p: int | None = None
     stlsq_threshold: float = 0.5
     n_ensemble_models: int = 100
 
@@ -244,9 +250,18 @@ def _hopf_library(batch: MultiTrajectoryGLSData, cfg: HopfMultiTrajectoryGLSConf
         degree=cfg.poly_degree,
         include_bias=False,
     )
+    weak_kwargs = {}
+    if cfg.K is not None:
+        weak_kwargs["K"] = cfg.K
+    if cfg.H_xt is not None:
+        weak_kwargs["H_xt"] = cfg.H_xt
+    if cfg.p is not None:
+        weak_kwargs["p"] = cfg.p
+
     return WeakPDELibrary(
         function_library=base_library,
         spatiotemporal_grid=batch.metadata["t_grid"],
+        **weak_kwargs,
     )
 
 
@@ -265,10 +280,16 @@ def _hopf_make_weak_library(
         degree=cfg.poly_degree,
         include_bias=False,
     )
-    common_kwargs = dict(
-        function_library=base_library,
-        spatiotemporal_grid=batch.metadata["t_grid"],
-    )
+    common_kwargs = {
+        "function_library": base_library,
+        "spatiotemporal_grid": batch.metadata["t_grid"],
+    }
+    if cfg.K is not None:
+        common_kwargs["K"] = cfg.K
+    if cfg.H_xt is not None:
+        common_kwargs["H_xt"] = cfg.H_xt
+    if cfg.p is not None:
+        common_kwargs["p"] = cfg.p
     if variance_field is None:
         return WeakPDELibrary(**common_kwargs)
     return WeightedWeakPDELibrary(spatiotemporal_weights=variance_field, **common_kwargs)
@@ -332,6 +353,49 @@ def run_hopf_multi_trajectory_gls_experiment(
         fit_models_fn=_hopf_fit_multi_trajectory_weak_gls_models,
         coef_postprocess=lambda arr: arr.T,
         progress_desc="Monte Carlo Hopf MF",
+    )
+
+
+def fit_hopf_multi_trajectory_rollout_models(
+    cfg: HopfMultiTrajectoryGLSConfig,
+    *,
+    hf_trajectories: list[np.ndarray],
+    lf_trajectories: list[np.ndarray],
+    t_grid: np.ndarray,
+    weak_seed: int | None = None,
+) -> dict[str, Any]:
+    """Fit HF/LF/MF/MF_w Hopf models and wrap them for rollout validation."""
+
+    if not hf_trajectories and not lf_trajectories:
+        raise ValueError("At least one HF or LF trajectory is required.")
+
+    state_std = _hopf_reference_state_std(cfg)
+    noise_hf_abs = cfg.noise_hf_rel * state_std
+    noise_lf_abs = cfg.noise_lf_rel * state_std
+    batch = MultiTrajectoryGLSData(
+        hf=hf_trajectories,
+        lf=lf_trajectories,
+        t_argument=cfg.dt,
+        metadata={
+            "t_grid": np.asarray(t_grid, dtype=float),
+            "weak_seed": cfg.seed_base if weak_seed is None else int(weak_seed),
+        },
+    )
+    coef_map = _hopf_fit_multi_trajectory_weak_gls_models(
+        batch,
+        cfg,
+        cfg.make_optimizer,
+        t_argument=cfg.dt,
+        noise_hf_abs=noise_hf_abs,
+        noise_lf_abs=noise_lf_abs,
+    )
+    reference_trajectory = hf_trajectories[0] if hf_trajectories else lf_trajectories[0]
+    return build_polynomial_rollout_models(
+        coef_map,
+        poly_degree=cfg.poly_degree,
+        reference_trajectory=reference_trajectory,
+        state_names=HOPF_STATE_NAMES,
+        include_bias=False,
     )
 
 # ---------------------------------------------------------------------------
