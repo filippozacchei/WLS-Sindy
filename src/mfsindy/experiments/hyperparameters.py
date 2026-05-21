@@ -158,7 +158,6 @@ def optimize_hyperparams(
             result = evaluate(cfg)
             score = float(score_fn(result))
             row.update({"status": "ok", "score": score, "error": ""})
-
             is_better = best_score is None
             if best_score is not None:
                 is_better = score > best_score if maximize else score < best_score
@@ -178,7 +177,8 @@ def optimize_hyperparams(
                     "error": f"{type(exc).__name__}: {exc}",
                 }
             )
-
+        
+        print(row)
         rows.append(row)
 
     if best_params is None or best_score is None:

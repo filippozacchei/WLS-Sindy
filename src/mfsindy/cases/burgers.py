@@ -82,13 +82,13 @@ class BurgersMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # spatial / temporal discretization
     L: float = 8.0
     NX: int = 256
-    dt: float = 1e-2
-    T_train: float = 10.0
+    dt: float = 1e-3
+    T_train: float = 0.1
     nu: float = 0.1
 
     # multi-fidelity settings (numbers of trajectories)
-    n_lf: int = 100
-    n_hf: int = 10
+    n_lf: int = 10
+    n_hf: int = 1
     H_xt: list[float] | None = None
     K: int = 100
 
@@ -103,7 +103,7 @@ class BurgersMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     include_bias: bool = True
 
     stlsq_threshold: float = 0.05
-    n_ensemble_models: int = 200
+    n_ensemble_models: int = 20
 
     # random seeds
     seed_base: int = 231
@@ -198,6 +198,32 @@ def build_true_burgers_coefficients(nu: float) -> np.ndarray:
     return C_true
 
 
+def _canonicalize_burgers_trajectory(
+    data: np.ndarray,
+    t_grid: np.ndarray,
+    *,
+    variance: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Return Burgers fields in canonical ``(n_x, n_t, 1)`` order."""
+
+    data = np.asarray(data, dtype=float)
+    t_grid = np.asarray(t_grid, dtype=float)
+    if data.ndim != 3 or data.shape[-1] != 1:
+        raise ValueError("data must have shape (n_x, n_t, 1) or (n_t, n_x, 1).")
+
+    aligned_variance = None if variance is None else np.asarray(variance, dtype=float)
+    if data.shape[1] == t_grid.shape[0]:
+        U = data
+    elif data.shape[0] == t_grid.shape[0]:
+        U = np.swapaxes(data, 0, 1)
+        if aligned_variance is not None:
+            aligned_variance = aligned_variance.T
+    else:
+        raise ValueError("Could not align data with t_grid along the time axis.")
+
+    return U, aligned_variance
+
+
 
 # ---------------------------------------------------------------------------
 # Single Monte Carlo run (heteroscedastic GLS experiment)
@@ -214,12 +240,12 @@ def _build_burgers_gls_artifacts(
 
     # 1) Random initial condition and clean trajectory
     u0 = random_initial_condition(rng, cfg)
-    U_clean = burgers_solver(u0, cfg).T      # (NT, NX) → transpose
-    U = U_clean[:, :, None]                  # (NT, NX, 1) for PySINDy
+    U_clean = burgers_solver(u0, cfg).T      # (NX, NT)
+    U = U_clean[:, :, None]                  # (NX, NT, 1) for PySINDy
 
     # 2) Heteroscedastic noise based on |u_x|
     Ux = (np.roll(U, -1, axis=0) - np.roll(U, 1, axis=0)) / (2.0 * dx)
-    grad_mag = np.abs(Ux[:, :, 0])           # (NT, NX)
+    grad_mag = np.abs(Ux[:, :, 0])           # (NX, NT)
 
     alpha = cfg.noise_level
     variance = (alpha * grad_mag) ** 2
@@ -334,7 +360,7 @@ def generate_burgers_dataset(
 
     Returns
     -------
-    X_list : list of arrays (Nt, Nx, 1)
+    X_list : list of arrays (Nx, Nt, 1)
         Noisy trajectories.
     t      : (Nt,) time grid (shared).
     x      : (Nx,) spatial grid (shared).
@@ -347,12 +373,12 @@ def generate_burgers_dataset(
     X_list = []
     for _ in range(n_traj):
         u0 = random_initial_condition(rng, cfg_tmp)
-        U_clean = burgers_solver(u0, cfg_tmp).T      # (Nt, Nx)
-        U = U_clean                                  # (Nt, Nx)
+        U_clean = burgers_solver(u0, cfg_tmp).T      # (Nx, Nt)
+        U = U_clean                                  # (Nx, Nt)
 
         noise = noise_level * rng.standard_normal(size=U.shape)
         U_noisy = U + noise
-        X_list.append(U_noisy[:, :, None])           # (Nt, Nx, 1)
+        X_list.append(U_noisy[:, :, None])           # (Nx, Nt, 1)
 
     return X_list, t, x, nu
 
@@ -541,16 +567,7 @@ def build_burgers_intra_trajectory_artifacts(
     x_grid = np.asarray(x_grid, dtype=float)
     t_grid = np.asarray(t_grid, dtype=float)
 
-    if data.ndim != 3 or data.shape[-1] != 1:
-        raise ValueError("data must have shape (n_t, n_x, 1) or (n_x, n_t, 1).")
-
-    if data.shape[0] == t_grid.shape[0]:
-        U = data
-    elif data.shape[1] == t_grid.shape[0]:
-        U = np.swapaxes(data, 0, 1)
-        variance = variance.T
-    else:
-        raise ValueError("Could not align data with t_grid along the time axis.")
+    U, variance = _canonicalize_burgers_trajectory(data, t_grid, variance=variance)
 
     if variance.shape != U.shape[:-1]:
         raise ValueError(f"variance must match data[..., 0] shape {U.shape[:-1]}, got {variance.shape}.")
@@ -673,6 +690,7 @@ def build_burgers_weak_validation_blocks(
 
     blocks: list[WeakValidationBlock] = []
     for traj_idx, trajectory in enumerate(trajectories):
+        trajectory, _ = _canonicalize_burgers_trajectory(trajectory, t_grid)
         library = _burgers_make_weak_library(batch, dummy_cfg, variance_field=None)
         theta = np.asarray(library.fit_transform([trajectory])[0])
         rhs = np.asarray(library.convert_u_dot_integral(trajectory))
@@ -723,6 +741,7 @@ def get_burgers_feature_names(
         },
     )
     library = _burgers_make_weak_library(batch, dummy_cfg, variance_field=None)
+    reference_trajectory, _ = _canonicalize_burgers_trajectory(reference_trajectory, t_grid)
     return get_library_feature_names(library, reference_trajectory, input_features=("u",))
 
 # ---------------------------------------------------------------------------

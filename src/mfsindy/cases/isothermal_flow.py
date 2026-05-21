@@ -13,9 +13,11 @@ Includes:
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple, List, Callable
+from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -30,14 +32,15 @@ from mfsindy.experiments import (
     MonteCarloConfig,
     MultiTrajectoryGLSData,
     WeakValidationBlock,
-    coefficient_errors,
-    fit_intra_trajectory_gls_models,
     get_library_feature_names,
     run_intra_trajectory_gls_experiment,
-    run_monte_carlo_experiment,
     run_multi_trajectory_gls_experiment,
 )
 from mfsindy.weighted_weak_pde_library import WeightedWeakPDELibrary
+
+
+_NS_PART1_TUNED_HYPERPARAMS_FILENAME = "navierstokes_part1_tuned_hyperparams.json"
+_NS_PART1_MODELS = ("HF", "LF", "MF", "MF_w")
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +212,23 @@ def generate_isothermal_ns_dataset(
 # ---------------------------------------------------------------------------
 
 def _ddt_centered(f: np.ndarray, dt: float) -> np.ndarray:
-    """Centered finite difference in time with periodic wrap (axis=2)."""
-    return (np.roll(f, -1, axis=2) - np.roll(f, 1, axis=2)) / (2.0 * dt)
+    """Centered finite difference in time (axis=2) with one-sided boundaries."""
+    if f.ndim < 3:
+        raise ValueError("Expected an array with time on axis 2.")
+    if f.shape[2] < 2:
+        raise ValueError("At least two time samples are required.")
+
+    ddt = np.empty_like(f, dtype=float)
+    if f.shape[2] == 2:
+        slope = (f[:, :, 1] - f[:, :, 0]) / dt
+        ddt[:, :, 0] = slope
+        ddt[:, :, 1] = slope
+        return ddt
+
+    ddt[:, :, 1:-1] = (f[:, :, 2:] - f[:, :, :-2]) / (2.0 * dt)
+    ddt[:, :, 0] = (f[:, :, 1] - f[:, :, 0]) / dt
+    ddt[:, :, -1] = (f[:, :, -1] - f[:, :, -2]) / dt
+    return ddt
 
 
 def add_heteroscedastic_noise_temporal_derivative(
@@ -235,12 +253,12 @@ def add_heteroscedastic_noise_temporal_derivative(
 
     u = U_clean[..., 0]
     v = U_clean[..., 1]
+    p = U_clean[..., 2]
 
     u_t = _ddt_centered(u, dt)
     v_t = _ddt_centered(v, dt)
 
-    time_deriv_mag = np.sqrt(u_t ** 2 + v_t ** 2)  # (N, N, Nt)
-
+    time_deriv_mag = np.sqrt(u ** 2 + v ** 2 + 0*p ** 2)  # (N, N, Nt)
     variance = (sigma0 + alpha * time_deriv_mag) ** 2
     variance = np.maximum(variance, 1e-16)
     std = np.sqrt(variance)
@@ -286,6 +304,112 @@ def _ns_intra_h_xt(cfg: "NSIsothermalIntraTrajectoryGLSConfig") -> list[float]:
     if cfg.H_xt is not None:
         return list(cfg.H_xt)
     return [cfg.L / 10.0, cfg.L / 10.0, cfg.T / 40.0]
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _normalize_ns_part1_tuned_hyperparams(
+    params_by_model: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(params_by_model, dict):
+        raise ValueError("Expected a mapping of model names to hyperparameters.")
+
+    missing_models = [
+        model_name for model_name in _NS_PART1_MODELS if model_name not in params_by_model
+    ]
+    if missing_models:
+        missing = ", ".join(missing_models)
+        raise ValueError(f"Missing tuned hyperparameters for: {missing}.")
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for model_name in _NS_PART1_MODELS:
+        params = params_by_model[model_name]
+        if not isinstance(params, dict):
+            raise ValueError(f"Expected a mapping of hyperparameters for {model_name!r}.")
+
+        if "stlsq_threshold" not in params:
+            raise ValueError(f"Missing 'stlsq_threshold' for {model_name!r}.")
+        if "H_xt" not in params:
+            raise ValueError(f"Missing 'H_xt' for {model_name!r}.")
+
+        h_xt = [float(value) for value in params["H_xt"]]
+        if len(h_xt) != 3:
+            raise ValueError(
+                f"Expected 'H_xt' to contain three entries for {model_name!r}, got {len(h_xt)}."
+            )
+
+        normalized[model_name] = {
+            "stlsq_threshold": float(params["stlsq_threshold"]),
+            "H_xt": h_xt,
+        }
+
+    return normalized
+
+
+def _ns_part1_tuned_hyperparams_candidates(
+    *,
+    results_dir: str | os.PathLike[str] | None = None,
+    filename: str = _NS_PART1_TUNED_HYPERPARAMS_FILENAME,
+) -> list[Path]:
+    candidates: list[Path] = []
+    if results_dir is not None:
+        candidates.append(Path(results_dir) / filename)
+
+    repo_root = _repo_root()
+    candidates.extend(
+        [
+            repo_root / "examples" / "isothermal_flow" / "results" / filename,
+            repo_root / "results" / filename,
+        ]
+    )
+
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        key = candidate.resolve(strict=False)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped
+
+
+def load_ns_part1_tuned_hyperparams(
+    *,
+    results_dir: str | os.PathLike[str] | None = None,
+    filename: str = _NS_PART1_TUNED_HYPERPARAMS_FILENAME,
+) -> dict[str, dict[str, Any]] | None:
+    """Load cached Part 1 Navier-Stokes tuning results when available."""
+
+    for path in _ns_part1_tuned_hyperparams_candidates(results_dir=results_dir, filename=filename):
+        if not path.is_file():
+            continue
+        with path.open(encoding="utf-8") as handle:
+            return _normalize_ns_part1_tuned_hyperparams(json.load(handle))
+    return None
+
+
+def save_ns_part1_tuned_hyperparams(
+    params_by_model: dict[str, Any],
+    *,
+    results_dir: str | os.PathLike[str] | None = None,
+    filename: str = _NS_PART1_TUNED_HYPERPARAMS_FILENAME,
+) -> Path:
+    """Persist Part 1 Navier-Stokes tuning results for reuse."""
+
+    normalized = _normalize_ns_part1_tuned_hyperparams(params_by_model)
+    if results_dir is None:
+        target = _repo_root() / "examples" / "isothermal_flow" / "results" / filename
+    else:
+        target = Path(results_dir) / filename
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8") as handle:
+        json.dump(normalized, handle, indent=2)
+        handle.write("\n")
+    return target
 
 
 def compute_reference_coefficients(
@@ -354,15 +478,15 @@ class NSIsothermalMultiTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin
     """
 
     # multi-fidelity settings
-    n_lf: int = 100
-    n_hf: int = 10
+    n_lf: int = 10
+    n_hf: int = 1
 
     # relative noise levels w.r.t. std(U_clean_ref)
     noise_lf_rel: float = 0.25
     noise_hf_rel: float = 0.01
 
     # grid / time
-    N: int = 64
+    N: int = 32
     Nt: int = 100
     Nt_std: int = 500
     L: float = 5.0

@@ -103,7 +103,7 @@ def plot_trajectories_additive_noise(
     dt = t[1] - t[0]
     u_t = (np.roll(U[..., 0], -1, axis=2) - np.roll(U[..., 0], 1, axis=2)) / (2.0 * dt)
     v_t = (np.roll(U[..., 1], -1, axis=2) - np.roll(U[..., 1], 1, axis=2)) / (2.0 * dt)
-    deriv_mag = np.sqrt(u_t**2 + v_t**2)
+    deriv_mag = np.sqrt(U[..., 0]**2 + U[..., 1]**2 + 0*U[..., 2]**2)
     std = sigma0 + alpha * deriv_mag
     U_noisy = U + std[..., None] * np.random.randn(*U.shape)
 

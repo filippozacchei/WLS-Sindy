@@ -424,7 +424,7 @@ class LorenzIntraTrajectoryGLSConfig(MonteCarloConfig, EnsembleConfigMixin):
     # weak-library settings
     poly_degree: int = 2
     derivative_order: int = 1
-    H_xt: float = 0.01
+    H_xt: float = 0.005
     K: int = int(5 * (t1-t0) / H_xt)          # can be set as int(5 * (t1-t0) / H_xt)
     p: int = 2
     include_bias: bool = False
