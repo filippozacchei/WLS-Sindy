@@ -6,8 +6,8 @@ Welcome to the documentation hub for MF-SINDy. The content is authored in Markdo
 
 1. **Clone & install**
    ```bash
-   git clone https://github.com/filippozacchei/2025_visiting.git
-   cd 2025_visiting
+   git clone https://github.com/filippozacchei/MFSindy.git
+   cd MFSindy
    python -m venv .venv && source .venv/bin/activate
    pip install -e .[dev]
    ```
