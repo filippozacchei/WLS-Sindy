@@ -12,7 +12,6 @@ The project follows the US-RSE recommendations for research software: a `src/` p
 ├── examples                  # GLS / WLS experiments & notebooks
 ├── docs                      # documentation entry point + assets
 ├── scripts                   # utility scripts for project maintenance
-├── paper_results_section.tex  # standalone LaTeX draft for the results section
 ├── pyproject.toml            # packaging metadata
 └── noxfile.py, .pre-commit-config.yaml (added below)
 ```
@@ -31,7 +30,6 @@ The package exposes reusable case modules (`mfsindy.cases.*`), plotting helpers,
 
 - [Hosted documentation](https://filippozacchei.github.io/MFSindy/) (MkDocs Material) mirrors the Markdown under `docs/`. Use `mkdocs serve` for local previews; `.github/workflows/docs.yml` guards the build, while `.github/workflows/mkdocs-deploy.yml` publishes to GitHub Pages.
 - `scripts/` contains lightweight project utilities.
-- `paper_results_section.tex` is a standalone LaTeX draft of the results section that can be dropped into the manuscript source tree.
 
 ## Examples
 
