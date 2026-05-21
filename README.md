@@ -21,7 +21,7 @@ The project follows the US-RSE recommendations for research software: a `src/` p
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]   # installs mfsindy plus dev tooling
+pip install -e ".[dev]"   # installs mfsindy plus dev tooling
 ```
 
 The package exposes reusable case modules (`mfsindy.cases.*`), plotting helpers, and the custom `WeightedWeakPDELibrary` implementation.
