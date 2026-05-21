@@ -9,7 +9,7 @@ Welcome to the documentation hub for MF-SINDy. The content is authored in Markdo
    git clone https://github.com/filippozacchei/MFSindy.git
    cd MFSindy
    python -m venv .venv && source .venv/bin/activate
-   pip install -e .[dev]
+   pip install -e ".[dev]"
    ```
 2. **Launch notebooks** – run `jupyter lab examples/<case>/part1.ipynb` (multi-trajectory GLS) or `part2.ipynb` (heteroscedastic GLS). The repository also includes a standalone forecasting notebook at `examples/double_pendulum/forecasting.ipynb`.
 3. **Cache outputs** – figures/video exports land in `examples/<case>/results/` (git-ignored) so experiments remain reproducible without polluting the repo.
@@ -33,7 +33,7 @@ Together they cover the scalar ODE setup, trajectory-wise weighting across ensem
 To preview locally:
 
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev]"
 mkdocs serve
 ```
 

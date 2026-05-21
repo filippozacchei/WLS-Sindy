@@ -5,7 +5,7 @@ The public-facing docs are built with [MkDocs Material](https://squidfunk.github
 ## Local preview
 
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev]"
 mkdocs serve
 ```
 
